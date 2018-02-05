@@ -949,19 +949,43 @@ def smooth(x,window_len=11,window='hanning'):
 	y=numpy.convolve(w/w.sum(),s,mode='valid')
 	return y
 
-def estimate_lte(y, x, q, p, delay, is_multirealization = False, verbose = False):
+def estimate_lte(y, x, q, p, delay, k = 5, is_multirealization = False):
 	"""
 	Estimate the local transfer entropy from y to x with autoregressive
 	order q for y and p for x, and a time delay from y to x of delay.
 
-	This uses the Java Information Dynamics Toolbox (JIDT) estimate
+	The local transfer entropy is the expectand of the
+	total transfer entropy, which is the mutual information
+	between the future of X and the past of Y, conditional on
+	the past of X,
+
+		$I[X_{t}; Y_{t-q-(delay-1)}^{t-delay} | X_{t-p}^{t-1}]$
+
+	We use the Java Information Dynamics Toolbox (JIDT) to estimate
 	the local transfer entropy, using the KSG-inspired conditional 
 	mutual information estimator.
 
 	Parameters
 	----------
-	var1 : type
-			description
+	y : numpy.array
+			The nominal input process.
+	x : numpy.array
+			The nominal output process.
+	q : int
+			The autoregressive order for the nominal input process.
+	p : int
+			The autoregressive order for the nominal output process.
+	delay : int
+			The time delay to use for the input process, where
+			delay = 1 would give the standard (non-delayed) 
+			transfer entropy.
+	k : int
+			The number of nearest neighbors to use in estimating
+			the local transfer entropy.
+	is_multirealization : boolean
+			Whether x and y are stored by-realization,
+			or as a single realization.
+	verbose : 
 
 	Returns
 	-------
@@ -1010,6 +1034,7 @@ def estimate_lte(y, x, q, p, delay, is_multirealization = False, verbose = False
 	miCalc.setProperty(miCalcClass.L_PROP_NAME, "{}".format(q))
 	miCalc.setProperty(miCalcClass.K_PROP_NAME, "{}".format(p))
 	miCalc.setProperty(miCalcClass.DELAY_PROP_NAME, "{}".format(delay))
+	miCalc.setProperty("k", "{}".format(k))
 
 	miCalc.initialise()
 
@@ -1053,10 +1078,10 @@ def determine_delay(y, x, p_best, method = 'maxTE', is_multirealization = False,
 
 	miCalc.setProperty("NOISE_LEVEL_TO_ADD", "0")
 
-	miCalc.getProperty(miCalcClass.DELAY_PROP_NAME)
+	# miCalc.getProperty(miCalcClass.DELAY_PROP_NAME)
 
-	miCalc.getProperty(miCalcClass.L_PROP_NAME)
-	miCalc.getProperty(miCalcClass.K_PROP_NAME)
+	# miCalc.getProperty(miCalcClass.L_PROP_NAME)
+	# miCalc.getProperty(miCalcClass.K_PROP_NAME)
 
 	miCalc.setProperty(miCalcClass.L_PROP_NAME, "{}".format(q))
 	miCalc.setProperty(miCalcClass.K_PROP_NAME, "{}".format(p_best))
