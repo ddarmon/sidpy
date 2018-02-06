@@ -949,7 +949,7 @@ def smooth(x,window_len=11,window='hanning'):
 	y=numpy.convolve(w/w.sum(),s,mode='valid')
 	return y
 
-def estimate_lte(y, x, q, p, delay, k = 5, is_multirealization = False):
+def estimate_lte(y, x, q, p, delay, k = 5):
 	"""
 	Estimate the local transfer entropy from y to x with autoregressive
 	order q for y and p for x, and a time delay from y to x of delay.
@@ -959,7 +959,7 @@ def estimate_lte(y, x, q, p, delay, k = 5, is_multirealization = False):
 	between the future of X and the past of Y, conditional on
 	the past of X,
 
-		$I[X_{t}; Y_{t-q-(delay-1)}^{t-delay} | X_{t-p}^{t-1}]$
+		$I[X_{t}; Y_{t-q-delay}^{t-1-delay} | X_{t-p}^{t-1}]$
 
 	We use the Java Information Dynamics Toolbox (JIDT) to estimate
 	the local transfer entropy, using the KSG-inspired conditional 
@@ -977,19 +977,122 @@ def estimate_lte(y, x, q, p, delay, k = 5, is_multirealization = False):
 			The autoregressive order for the nominal output process.
 	delay : int
 			The time delay to use for the input process, where
-			delay = 1 would give the standard (non-delayed) 
+			delay = 0 would give the standard (non-delayed) 
 			transfer entropy.
 	k : int
 			The number of nearest neighbors to use in estimating
 			the local transfer entropy.
-	is_multirealization : boolean
-			Whether x and y are stored by-realization,
-			or as a single realization.
 
 	Returns
 	-------
 	r : int
 			description
+
+	Notes
+	-----
+	Any notes go here.
+
+	Examples
+	--------
+	>>> import module_name
+	>>> # Demonstrate code here.
+
+	"""
+
+	# Automatically convert to multi-trial/realization
+	# representation, even if x is just a single trial.
+
+	if len(x[0, :].shape):
+		x = x.reshape(1, -1)
+		y = y.reshape(1, -1)
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Initialize the Java interface with JIDT using
+	# JPype:
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	# NOTE: Need infodynamics.jar in the Applications folder for this to work!
+
+	jarLocation = "/Applications/infodynamics.jar"
+
+	if not isJVMStarted():
+		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
+
+	implementingClass = "infodynamics.measures.continuous.kraskov.TransferEntropyCalculatorKraskov"
+	indexOfLastDot = string.rfind(implementingClass, ".")
+	implementingPackage = implementingClass[:indexOfLastDot]
+	implementingBaseName = implementingClass[indexOfLastDot+1:]
+	miCalcClass = eval('JPackage(\'%s\').%s' % (implementingPackage, implementingBaseName))
+	miCalc = miCalcClass()
+
+	# Set the properties of the JIDT LTE calculator based on the input
+	# to this function.
+
+	miCalc.setProperty("NOISE_LEVEL_TO_ADD", "0")
+
+	# miCalc.getProperty(miCalcClass.L_PROP_NAME)
+	# miCalc.getProperty(miCalcClass.K_PROP_NAME)
+
+	miCalc.setProperty(miCalcClass.L_PROP_NAME, "{}".format(q))
+	miCalc.setProperty(miCalcClass.K_PROP_NAME, "{}".format(p))
+
+	# Add 1 here because JIDT uses the convention that delay = 1 corresponds
+	# to the standard transfer entropy, while sidpy uses the convention that
+	# delay = 0 corresponds to the standard transfer entropy.
+
+	miCalc.setProperty(miCalcClass.DELAY_PROP_NAME, "{}".format(delay+1))
+	miCalc.setProperty("k", "{}".format(k))
+
+	miCalc.initialise()
+
+	miCalc.startAddObservations()
+
+	for trial in range(0,x.shape[0]):
+		miCalc.addObservations(y[trial, :], x[trial, :])
+
+	miCalc.finaliseAddObservations()
+
+	lTEs=miCalc.computeLocalOfPreviousObservations()
+	TE = numpy.nanmean(lTEs)
+
+	return lTEs[:], TE
+
+def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
+	"""
+	Description of function goes here
+
+	Parameters
+	----------
+	y : numpy.array
+			The nominal input process.
+	x : numpy.array
+			The nominal output process.
+	p : int
+			The autoregressive order for the nominal output process.
+	q : int
+			The autoregressive order for the nominal input process.
+			Defaults to 1 for determining the optimal delay using JIDT.
+	method : string
+			What method to use in determining the optimal delay. One of
+			{'maxTE', 'minMSE'}.
+	verbose : boolean
+			Whether to announce the stages of determine_delay.
+
+	Returns
+	-------
+	delay : int
+			The optimized delay for the input process.
+			delay = 0 corresponds to standard Transfer entropy.
+	lTEs : numpy.array
+			The local transfer entropies corresponding to the
+			optimized delay.
+	delays : numpy.array
+			The delays considered by determine_delay.
+	TE_by_delay : float
+			The total transfer entropies estimated using
+			the delays considered by determine_delay
 
 	Notes
 	-----
@@ -1022,74 +1125,15 @@ def estimate_lte(y, x, q, p, delay, k = 5, is_multirealization = False):
 	miCalcClass = eval('JPackage(\'%s\').%s' % (implementingPackage, implementingBaseName))
 	miCalc = miCalcClass()
 
-	# Set the properties of the JIDT LTE calculator based on the input
-	# to this function.
-
 	miCalc.setProperty("NOISE_LEVEL_TO_ADD", "0")
-
-	# miCalc.getProperty(miCalcClass.L_PROP_NAME)
-	# miCalc.getProperty(miCalcClass.K_PROP_NAME)
 
 	miCalc.setProperty(miCalcClass.L_PROP_NAME, "{}".format(q))
 	miCalc.setProperty(miCalcClass.K_PROP_NAME, "{}".format(p))
-	miCalc.setProperty(miCalcClass.DELAY_PROP_NAME, "{}".format(delay))
-	miCalc.setProperty("k", "{}".format(k))
-
-	miCalc.initialise()
-
-	miCalc.startAddObservations()
-
-	for trial in range(0,x.shape[0]):
-		miCalc.addObservations(y[trial, :], x[trial, :])
-
-	miCalc.finaliseAddObservations()
-
-	lTEs=miCalc.computeLocalOfPreviousObservations()
-	TE = numpy.nanmean(lTEs)
-
-	r = numpy.max([p, q + delay])
-
-	return r, lTEs, TE
-
-def determine_delay(y, x, p_best, method = 'maxTE', is_multirealization = False, verbose = False):
-	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-	#
-	# Initialize the Java interface with JIDT using
-	# JPype:
-	#
-	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-	# NOTE: Need infodynamics.jar in the Applications folder for this to work!
-
-	jarLocation = "/Applications/infodynamics.jar"
-
-	if not isJVMStarted():
-		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
-
-	implementingClass = "infodynamics.measures.continuous.kraskov.TransferEntropyCalculatorKraskov"
-	indexOfLastDot = string.rfind(implementingClass, ".")
-	implementingPackage = implementingClass[:indexOfLastDot]
-	implementingBaseName = implementingClass[indexOfLastDot+1:]
-	miCalcClass = eval('JPackage(\'%s\').%s' % (implementingPackage, implementingBaseName))
-	miCalc = miCalcClass()
-
-	q = 1
-
-	miCalc.setProperty("NOISE_LEVEL_TO_ADD", "0")
-
-	# miCalc.getProperty(miCalcClass.DELAY_PROP_NAME)
-
-	# miCalc.getProperty(miCalcClass.L_PROP_NAME)
-	# miCalc.getProperty(miCalcClass.K_PROP_NAME)
-
-	miCalc.setProperty(miCalcClass.L_PROP_NAME, "{}".format(q))
-	miCalc.setProperty(miCalcClass.K_PROP_NAME, "{}".format(p_best))
 
 	delays = range(1, 11)
 	TE_by_delay = numpy.zeros(len(delays))
 
 	lTEs_by_delay = {}
-	qp_best_by_delay = {}
 
 	if verbose:
 		print 'Searching for optimal delay using delay* = argmin TE(delay)...'
@@ -1119,23 +1163,15 @@ def determine_delay(y, x, p_best, method = 'maxTE', is_multirealization = False,
 
 		lTEs_by_delay[delay_ind] = lTEs
 
-		q_best = q
+	ind = numpy.argmax(TE_by_delay)
+	delay = delays[ind] - 1
 
-		qp_best_by_delay[delay_ind] = (q_best, p_best)
-
-	ind_best = numpy.argmax(TE_by_delay)
-	delay_best = delays[ind_best] - 1
-
-	q_best, p_best = qp_best_by_delay[ind_best]
-
-	r_best = numpy.max([p_best, q_best + delay_best])
-
-	lTEs = lTEs_by_delay[ind_best]
+	lTEs = lTEs_by_delay[ind]
 
 	if verbose:
-		print 'Chose delay* = {}...'.format(delay_best)
+		print 'Chose delay* = {}...'.format(delay)
 
-	return delay_best, q_best, p_best, r_best, lTEs, delays, TE_by_delay
+	return delay, lTEs, delays, TE_by_delay
 
 def stack_io(y, x, q, p, delay):
 	"""
@@ -1182,61 +1218,141 @@ def stack_io(y, x, q, p, delay):
 	>>> # Demonstrate code here.
 
 	"""
+
 	assert delay >= -1, "Error: The delay must be >= -1."
 
 	r = numpy.max([p, q + delay])
 
-	Y = embed_ts(y[0, :], p_max = r)
-	X = embed_ts(x[0, :], p_max = r)
+	Y = embed_ts(y[0, :], p_max = r, is_multirealization = True)
+	X = embed_ts(x[0, :], p_max = r, is_multirealization = True)
 
 	Y_stack = Y[:, r-(q+delay):r-delay]
 	X_stack = X[:, r-p:]
-
-	for trial_ind in range(1, x.shape[0]):
-		Y = embed_ts(y[trial_ind, :], p_max = r)
-		X = embed_ts(x[trial_ind, :], p_max = r)
-
-		Y_stack = numpy.concatenate((Y_stack, Y[:, r-(q+delay):r-delay]))
-		X_stack = numpy.concatenate((X_stack, X[:, r-p:]))
 
 	Z = numpy.concatenate((Y_stack, X_stack), 1)
 
 	return Z
 
 
-def estimate_ste(y, x, q_best, p_best, r_best, delay_best, lTEs, pow_neighbors = 0.5, is_multirealization = False, verbose = False):
+def stack_sid_by_trial(sid, q, p, delay, num_trials, points_per_trial):
+	"""
+	stack_sid_by_trial stacks the specific information dynamic measure
+	in a trial-by-trial / realization-by-realization numpy array. This
+	is necessary because regression-based estimates of STE will return
+	all of the trials collapsed into a single long pseudo-trial.
+
+	Parameters
+	----------
+	sid : numpy.array
+			The specific information dynamic measure to reformat
+			into the proper trial-by-trial numpy.array.
+	q : int
+			The autoregressive order for the nominal input process.
+	p : int
+			The autoregressive order for the nominal output process.
+	delay : int
+			The time delay to use for the input process, where
+			delay = 0 would give the standard (non-delayed) 
+			transfer entropy, delay = -1 gives a
+			contemporaneous transfer entropy, and delay > 0
+			gives a delayed transfer entropy.
+			
+
+	Returns
+	-------
+	sid_by_trial : numpy.array
+			The specific information dynamic measure formatted
+			into a num_trials X points_per_trial array appropriate
+			for direct comparison to the original time series.
+
+	Notes
+	-----
+	Any notes go here.
+
+	Examples
+	--------
+	>>> import module_name
+	>>> # Demonstrate code here.
+
+	"""
+
+	r = numpy.max([p, q + delay])
+
+	points_per_truncated_trial = points_per_trial - r
+
+	sid_by_trial = numpy.empty((num_trials, points_per_truncated_trial + r))
+
+	sid_by_trial.fill(numpy.nan)
+
+	for trial_ind in range(num_trials):
+		sid_by_trial[trial_ind, r:] = sid[trial_ind*points_per_truncated_trial:(trial_ind + 1)*points_per_truncated_trial]
+
+	return sid_by_trial
+
+
+def estimate_ste(y, x, q, p, delay, lTEs, pow_neighbors = 0.5, verbose = False):
+	"""
+	estimate_ste estimates the specific transfer entropy by smoothing
+	the local transfer entropy estimates against the delay vectors
+	using a k-nearest neighbor smoother.
+
+	Parameters
+	----------
+	y : numpy.array
+			The nominal input process.
+	x : numpy.array
+			The nominal output process.
+	q : int
+			The autoregressive order for the nominal input process.
+	p : int
+			The autoregressive order for the nominal output process.
+	delay : int
+			The time delay to use for the input process, where
+			delay = 0 would give the standard (non-delayed) 
+			transfer entropy, delay = -1 gives a
+			contemporaneous transfer entropy, and delay > 0
+			gives a delayed transfer entropy.
+	lTEs : numpy.array
+			The estimated lTEs returned by estimate_lte.
+	pow_neighbors : float
+			A value in [0, 1] that determines the number of
+			nearest neighbors to use in the regression of
+			the local transfer entropy on the delay vectors.
+	verbose : boolean
+			Whether or not to announce the steps in estimate_ste.
+			
+
+	Returns
+	-------
+	sTEs_by_trial : numpy.array
+			The estimated specific transfer entropies per-trial.
+	lTEs_by_trial : numpy.array
+			The estimated local transfer entropies per-trial.
+
+	Notes
+	-----
+	Any notes go here.
+
+	Examples
+	--------
+	>>> import module_name
+	>>> # Demonstrate code here.
+
+	"""
+
 	if verbose:
 		print 'Storing LTEs by trial...'
 
-	points_per_truncated_trial = x.shape[1] - r_best
+	r = numpy.max([p, q + delay])
 
-	lTEs_by_trial = numpy.empty((x.shape[0], points_per_truncated_trial + r_best))
+	lTEs_by_trial = stack_sid_by_trial(lTEs, q, p, delay, num_trials = x.shape[0], points_per_trial = x.shape[1])
 
-	lTEs_by_trial.fill(numpy.nan)
-
-	for trial_ind in range(x.shape[0]):
-		lTEs_by_trial[trial_ind, r_best:] = lTEs[trial_ind*points_per_truncated_trial:(trial_ind + 1)*points_per_truncated_trial]
-
-	Y = embed_ts(y[0, :], p_max = r_best)
-	X = embed_ts(x[0, :], p_max = r_best)
-
-	X_src = Y[:, r_best-(q_best+delay_best):r_best-delay_best]
-	X_des = X[:, r_best-p_best:]
-
-	lTEs  = embed_ts(lTEs_by_trial[0, :], p_max = r_best)
-
-	for trial_ind in range(1, x.shape[0]):
-		Y = embed_ts(y[trial_ind, :], p_max = r_best)
-		X = embed_ts(x[trial_ind, :], p_max = r_best)
-
-		X_src = numpy.concatenate((X_src, Y[:, r_best-(q_best+delay_best):r_best-delay_best]))
-		X_des = numpy.concatenate((X_des, X[:, r_best-p_best:]))
-		lTEs  = numpy.concatenate((lTEs, embed_ts(lTEs_by_trial[trial_ind, :], p_max = r_best)))
+	lTEs  = embed_ts(lTEs_by_trial, r, is_multirealization = True)
 
 	if verbose:
 		print 'Computing sTEs...'
 
-	Z = numpy.concatenate((X_src, X_des), 1)
+	Z = stack_io(y, x, q, p, delay)
 
 	n_neighbors = int(numpy.floor(numpy.power(Z.shape[0], pow_neighbors)))
 
@@ -1246,16 +1362,11 @@ def estimate_ste(y, x, q_best, p_best, r_best, delay_best, lTEs, pow_neighbors =
 
 	sTEs = knn_out.predict(Z[:, :-1])
 
-	points_per_truncated_trial = x.shape[1] - r_best
+	points_per_truncated_trial = x.shape[1] - r
 
 	if verbose:
 		print 'Storing sTEs by trial...'
 
-	sTEs_by_trial = numpy.empty((x.shape[0], points_per_truncated_trial + r_best))
-
-	sTEs_by_trial.fill(numpy.nan)
-
-	for trial_ind in range(x.shape[0]):
-		sTEs_by_trial[trial_ind, r_best:] = sTEs[trial_ind*points_per_truncated_trial:(trial_ind + 1)*points_per_truncated_trial]
+	sTEs_by_trial = stack_sid_by_trial(sTEs, q, p, delay, num_trials = x.shape[0], points_per_trial = x.shape[1])
 
 	return sTEs_by_trial, lTEs_by_trial
