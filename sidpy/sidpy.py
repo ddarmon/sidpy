@@ -1054,10 +1054,15 @@ def estimate_lte(y, x, q, p, delay, k = 5):
 
 	miCalc.finaliseAddObservations()
 
-	lTEs=miCalc.computeLocalOfPreviousObservations()
+	lTEs=miCalc.computeLocalOfPreviousObservations()[:]
 	TE = numpy.nanmean(lTEs)
 
-	return lTEs[:], TE
+	if len(lTEs.shape) == 1:
+		pass
+	else:
+		lTEs = stack_sid_by_trial(lTEs, q, p, delay, num_trials = x.shape[0], points_per_trial = x.shape[1])
+
+	return lTEs, TE
 
 def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
 	"""
@@ -1223,8 +1228,8 @@ def stack_io(y, x, q, p, delay):
 
 	r = numpy.max([p, q + delay])
 
-	Y = embed_ts(y[0, :], p_max = r, is_multirealization = True)
-	X = embed_ts(x[0, :], p_max = r, is_multirealization = True)
+	Y = embed_ts(y, p_max = r, is_multirealization = True)
+	X = embed_ts(x, p_max = r, is_multirealization = True)
 
 	Y_stack = Y[:, r-(q+delay):r-delay]
 	X_stack = X[:, r-p:]
@@ -1232,7 +1237,6 @@ def stack_io(y, x, q, p, delay):
 	Z = numpy.concatenate((Y_stack, X_stack), 1)
 
 	return Z
-
 
 def stack_sid_by_trial(sid, q, p, delay, num_trials, points_per_trial):
 	"""
@@ -1289,7 +1293,6 @@ def stack_sid_by_trial(sid, q, p, delay, num_trials, points_per_trial):
 
 	return sid_by_trial
 
-
 def estimate_ste(y, x, q, p, delay, lTEs, pow_neighbors = 0.5, verbose = False):
 	"""
 	estimate_ste estimates the specific transfer entropy by smoothing
@@ -1345,9 +1348,12 @@ def estimate_ste(y, x, q, p, delay, lTEs, pow_neighbors = 0.5, verbose = False):
 
 	r = numpy.max([p, q + delay])
 
-	lTEs_by_trial = stack_sid_by_trial(lTEs, q, p, delay, num_trials = x.shape[0], points_per_trial = x.shape[1])
+	if len(lTEs.shape) == 1:
+		is_multirealization = False
+	else:
+		is_multirealization = True
 
-	lTEs  = embed_ts(lTEs_by_trial, r, is_multirealization = True)
+	lTEs  = embed_ts(lTEs, r, is_multirealization = is_multirealization)
 
 	if verbose:
 		print 'Computing sTEs...'
@@ -1369,4 +1375,4 @@ def estimate_ste(y, x, q, p, delay, lTEs, pow_neighbors = 0.5, verbose = False):
 
 	sTEs_by_trial = stack_sid_by_trial(sTEs, q, p, delay, num_trials = x.shape[0], points_per_trial = x.shape[1])
 
-	return sTEs_by_trial, lTEs_by_trial
+	return sTEs_by_trial
