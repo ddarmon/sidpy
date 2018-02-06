@@ -985,11 +985,10 @@ def estimate_lte(y, x, q, p, delay, k = 5, is_multirealization = False):
 	is_multirealization : boolean
 			Whether x and y are stored by-realization,
 			or as a single realization.
-	verbose : 
 
 	Returns
 	-------
-	var1 : type
+	r : int
 			description
 
 	Notes
@@ -1137,6 +1136,73 @@ def determine_delay(y, x, p_best, method = 'maxTE', is_multirealization = False,
 		print 'Chose delay* = {}...'.format(delay_best)
 
 	return delay_best, q_best, p_best, r_best, lTEs, delays, TE_by_delay
+
+def stack_io(y, x, q, p, delay):
+	"""
+	stack_io stacks the input y and output x in a 
+	standard data matrix for use in regressions for
+	model selection and estimation of specific
+	transfer entropy.
+
+	Parameters
+	----------
+	y : numpy.array
+			The nominal input process.
+	x : numpy.array
+			The nominal output process.
+	q : int
+			The autoregressive order for the nominal input process.
+	p : int
+			The autoregressive order for the nominal output process.
+	delay : int
+			The time delay to use for the input process, where
+			delay = 0 would give the standard (non-delayed) 
+			transfer entropy, delay = -1 gives a
+			contemporaneous transfer entropy, and delay > 0
+			gives a delayed transfer entropy.
+			
+
+	Returns
+	-------
+	Z : numpy.array
+			The nominal input / output time series
+			stacked as to have the input time series
+			as the first q columns and the output
+			time series as the last p + 1 columns,
+			with appropriate time shifts specified
+			by delay.
+
+	Notes
+	-----
+	Any notes go here.
+
+	Examples
+	--------
+	>>> import module_name
+	>>> # Demonstrate code here.
+
+	"""
+	assert delay >= -1, "Error: The delay must be >= -1."
+
+	r = numpy.max([p, q + delay])
+
+	Y = embed_ts(y[0, :], p_max = r)
+	X = embed_ts(x[0, :], p_max = r)
+
+	Y_stack = Y[:, r-(q+delay):r-delay]
+	X_stack = X[:, r-p:]
+
+	for trial_ind in range(1, x.shape[0]):
+		Y = embed_ts(y[trial_ind, :], p_max = r)
+		X = embed_ts(x[trial_ind, :], p_max = r)
+
+		Y_stack = numpy.concatenate((Y_stack, Y[:, r-(q+delay):r-delay]))
+		X_stack = numpy.concatenate((X_stack, X[:, r-p:]))
+
+	Z = numpy.concatenate((Y_stack, X_stack), 1)
+
+	return Z
+
 
 def estimate_ste(y, x, q_best, p_best, r_best, delay_best, lTEs, pow_neighbors = 0.5, is_multirealization = False, verbose = False):
 	if verbose:
