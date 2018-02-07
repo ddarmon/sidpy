@@ -1002,7 +1002,7 @@ def estimate_lte(y, x, q, p, delay, k = 5):
 	# Automatically convert to multi-trial/realization
 	# representation, even if x is just a single trial.
 
-	if len(x[0, :].shape):
+	if len(x.shape) == 1:
 		x = x.reshape(1, -1)
 		y = y.reshape(1, -1)
 
@@ -1057,8 +1057,22 @@ def estimate_lte(y, x, q, p, delay, k = 5):
 	lTEs=miCalc.computeLocalOfPreviousObservations()[:]
 	TE = numpy.nanmean(lTEs)
 
+	# Need to handle the case of single-realization and
+	# multi-realization, since JIDT handles these two
+	# cases differently.
+
+	# For a single realization of length T, 
+	# JIDT returns a length T array with the first 
+	# r = max {p, q + delay} set to 0.
+
+	# For a multi-realization, where each of N
+	# realizations has length T, JIDT returns
+	# a length N*(T - r) array that concatenates
+	# the estimated local transfer entropies.
+
 	if len(lTEs.shape) == 1:
-		pass
+		r = numpy.max([p, q + delay])
+		lTEs[:r] = numpy.nan
 	else:
 		lTEs = stack_sid_by_trial(lTEs, q, p, delay, num_trials = x.shape[0], points_per_trial = x.shape[1])
 
@@ -1109,6 +1123,15 @@ def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
 	>>> # Demonstrate code here.
 
 	"""
+
+	# Automatically convert to multi-trial/realization
+	# representation, even if x is just a single trial.
+
+	if len(x[0, :].shape):
+		x = x.reshape(1, -1)
+		y = y.reshape(1, -1)
+
+
 	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	#
 	# Initialize the Java interface with JIDT using
@@ -1161,10 +1184,17 @@ def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
 
 		# print 'Computing local Transfer Entropies...'
 
-		lTEs=miCalc.computeLocalOfPreviousObservations()
+		lTEs=miCalc.computeLocalOfPreviousObservations()[:]
 		TE = numpy.mean(lTEs)
 
 		TE_by_delay[delay_ind] = TE
+
+		r = numpy.max([p, q + delay - 1])
+
+		if x.shape[0] == 1:
+			lTEs[:r] = numpy.nan
+		else:
+			lTEs = stack_sid_by_trial(lTEs, q, p, delay - 1, num_trials = x.shape[0], points_per_trial = x.shape[1])
 
 		lTEs_by_delay[delay_ind] = lTEs
 
@@ -1223,6 +1253,10 @@ def stack_io(y, x, q, p, delay):
 	>>> # Demonstrate code here.
 
 	"""
+
+	if len(x.shape) == 1:
+		x = x.reshape(1, -1)
+		y = y.reshape(1, -1)
 
 	assert delay >= -1, "Error: The delay must be >= -1."
 
@@ -1348,12 +1382,14 @@ def estimate_ste(y, x, q, p, delay, lTEs, pow_neighbors = 0.5, verbose = False):
 
 	r = numpy.max([p, q + delay])
 
-	if len(lTEs.shape) == 1:
-		is_multirealization = False
-	else:
-		is_multirealization = True
+	if len(x.shape) == 1:
+		x = x.reshape(1, -1)
+		y = y.reshape(1, -1)
 
-	lTEs  = embed_ts(lTEs, r, is_multirealization = is_multirealization)
+	if len(lTEs.shape) == 1:
+		lTEs  = embed_ts(lTEs, r, is_multirealization = False)
+	else:
+		lTEs  = embed_ts(lTEs, r, is_multirealization = True)
 
 	if verbose:
 		print 'Computing sTEs...'
@@ -1375,4 +1411,9 @@ def estimate_ste(y, x, q, p, delay, lTEs, pow_neighbors = 0.5, verbose = False):
 
 	sTEs_by_trial = stack_sid_by_trial(sTEs, q, p, delay, num_trials = x.shape[0], points_per_trial = x.shape[1])
 
-	return sTEs_by_trial
+	if x.shape[0] == 1:
+		sTEs = sTEs_by_trial.flatten()
+	else:
+		sTEs = sTEs_by_trial
+
+	return sTEs
