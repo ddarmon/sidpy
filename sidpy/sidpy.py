@@ -380,6 +380,180 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn
 
 	return p_opt, mse_opt, mse_by_p, kstar_by_p
 
+def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upperbound = 0.5, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
+	"""
+	choose_model_order_io_mse computes the mean-squared error (MSE) of a
+	k-nearest neighbor predictor for the output of the input-output
+	system (y, x) where y is the nominal input and x is the nominal output.
+
+	Parameters
+	----------
+	y : list or numpy.array
+			The nominal input time series as a list (if is_multirealization == False)
+			or a numpy.array (if is_multirealization == True).
+	x : list or numpy.array
+			The nominal output time series as a list (if is_multirealization == False)
+			or a numpy.array (if is_multirealization == True).
+	q_max : int
+			The maximum model order to consider for the input process.
+	p_fix : int
+			The value to fix the model order of the output process.
+			For the Self-Predictively Optimal (SPO) version of
+			transfer entropy, this should be fixed at the optimal
+			model order for predicting the future of the output 
+			process without knowledge of the input process.
+	p_max : int
+			The maximum model order to consider for the output process,
+			if p_fix == None.
+	power_upperbound : float
+			A number in [0, 1] that determines the upper bound
+			on the number of nearest neighbors to consider 
+			for the k-nearest neighbor estimator.
+	nn_package : string
+			The package used to compute the nearest neighbors,
+			one of {'sklearn', 'pyflann'}. sklearn is an exact
+			nearest neighbor search, while pyflann is an
+			approximate (and non-deterministic) nearest neighbor
+			search.
+	is_multirealization : boolean
+			Is the time series x given as 
+			a single long time series, or in a 
+			realization-by-realization format 
+			where each row corresponds to a single
+			realization?
+	announce_stages : boolean
+			Whether or not to announce the stages of the estimation
+			of the MSE.
+
+	output_verbose : boolean
+			Whether or not to output the MSE per model order.
+
+	Returns
+	-------
+	q_opt : int
+			The input model order that minimized the MSE.
+	p_opt : int
+			The output model order that minimized the MSE,
+			or p_fix if p_fix != None.
+	mse_opt : float
+			The minimized value NLPL(p_opt).
+	mse_by_qp : list
+			The MSE as a function of the model orders.
+	kstar_by_qp : list
+			The tuned values of k to use for the
+			k-nearest neighbor predictor as a function
+			of the model orders.
+
+	"""
+
+	if p_fix == None and p_max == None:
+		p_max = q_max
+		ps = range(0, p_max + 1)
+	elif p_fix != None:
+		p_max = p_fix
+		ps = [p_fix]
+	else:
+		ps = range(0, p_max + 1)
+
+
+	qs = range(0, q_max + 1)
+
+	# Check that pow_upperbound \in [0, 1]
+
+	assert pow_upperbound >= 0 and pow_upperbound <= 1, 'pow_upperbound must be a floating point number in [0, 1].'
+
+	Lp_norm = 2.
+
+	# Embed the input and output time series using a maximum 
+	# model orders of q_max and p_max, respectively.
+
+	r_max = numpy.max([p_max, q_max])
+
+	Y_full = embed_ts(y, r_max, is_multirealization = is_multirealization)
+	X_full = embed_ts(x, r_max, is_multirealization = is_multirealization)
+
+	# Compute the NLPL as a function of p.
+
+	mse_by_qp = numpy.empty((len(qs), len(ps)))
+	kstar_by_qp = numpy.empty((len(qs), len(ps)))
+
+	mse_by_qp.fill(numpy.nan)
+	kstar_by_qp.fill(numpy.nan)
+
+	for p_ind in range(len(ps)):
+		p_use = ps[p_ind]
+		for q_ind in range(len(qs)):
+			q_use = qs[q_ind]
+
+			if p_use == 0 and q_use == 0:
+				mse_by_qp[q_ind, p_ind] = numpy.mean(numpy.power(x - numpy.mean(x), 2))
+				kstar_by_qp[q_ind, p_ind] = len(x)
+			else:
+				Y = Y_full[:, (r_max-q_use):-1]
+				X = X_full[:, (r_max-p_use):]
+
+				# Consider doing this via accessing a Z_full array 
+				# rather than continuously stacking Y and X arrays.
+				Z = numpy.concatenate((Y, X), axis = 1)
+
+				n_neighbors = int(numpy.ceil(numpy.power(Z.shape[0] - 1, pow_upperbound)))
+
+				n_neighbors_upperbound = n_neighbors
+
+				if announce_stages:
+					print 'Computing nearest neighbor distances using k_upper = {}...'.format(n_neighbors)
+
+				# Compute the nearest neighbor distances and nearest neighbor indices
+				# in the marginal space.
+
+				Z_past = Z[:, :-1]
+
+				if nn_package == 'pyflann':
+					flann = pyflann.FLANN()
+
+					neighbor_inds, distances_marg = flann.nn(Z_past,Z_past,n_neighbors + 1);
+
+					neighbor_inds = neighbor_inds[:, 1:]
+					distances_marg = distances_marg[:, 1:]
+
+					distances_marg = numpy.sqrt(distances_marg) # Since FLANN returns the *squared* Euclidean distance.
+				elif nn_package == 'sklearn':
+					knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+
+					knn_out = knn.fit(Z_past)
+
+					distances_marg, neighbor_inds = knn_out.kneighbors()
+				else:
+					assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
+
+				if announce_stages:
+					print 'Done computing nearest neighbor distances...'
+
+				if announce_stages:
+					print 'Tuning nearest neighbor number...'
+
+				opt_out = scipy.optimize.minimize_scalar(loocv_mse, bounds = [1.0, n_neighbors_upperbound], method = 'bounded', args = (neighbor_inds, Z))
+
+				if announce_stages:
+					print 'Done tuning nearest neighbor number...'
+
+				k_opt = int(numpy.floor(opt_out['x']))
+
+				kstar_by_qp[q_ind, p_ind] = k_opt
+
+				if output_verbose:
+					print 'For (q = {}, p = {}) chose k* = {} with MSE(k*) = {}'.format(q_use, p_use, k_opt, opt_out['fun'])
+
+				mse_by_qp[q_ind, p_ind] = opt_out['fun']
+
+				if n_neighbors_upperbound - k_opt <= 10:
+					print "####################################################\n# Warning: For (q = {}, p = {}), Nelder-Mead is choosing k* near k_upper = {}.\n# Increase pow_upperbound.\n####################################################""".format(q_use, p_use, n_neighbors_upperbound)
+
+	q_opt_ind, p_opt_ind = numpy.unravel_index(numpy.nanargmin(mse_by_qp, axis = None), mse_by_qp.shape)
+	mse_opt = numpy.min(mse_by_qp)
+
+	return qs[q_opt_ind], ps[p_opt_ind], mse_opt, mse_by_qp, kstar_by_qp
+
 def compute_nearest_neighbors(X, n_neighbors, Lp_norm = 2):
 	Z = X
 
@@ -400,11 +574,9 @@ def compute_nearest_neighbors(X, n_neighbors, Lp_norm = 2):
 	return distances_marg, distances_joint
 
 def compute_nearest_neighbors_cross(Xfit, Xeval, n_neighbors, Lp_norm = 2):
-	Z = Xfit
-
 	knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
 
-	knn_out = knn.fit(Z)
+	knn_out = knn.fit(Xfit)
 
 	distances, neighbor_inds = knn_out.kneighbors(Xeval)
 
