@@ -1072,6 +1072,65 @@ def estimate_ter(n_neighbors, distances_marg, distances_joint, d, Lp_norm):
 
 	return ter, ler
 
+def estimate_ler_insample(x, p_opt, pow_neighbors = 0.75, is_multirealization = False):
+	"""
+	Estimate the local entropy rate using distances between kth-nearest
+	neighbors in the marginal and joint spaces, using the estimator
+
+	\hat{h}[X_{t} | X_{t - d}^{t - 1}] = \hat{h}[X_{t - d}^{t}] - \hat{h}[X_{t - d}^{t - 1}],
+
+	e.g. the conditional local entropy equals the joint local entropy minus
+	the marginal local entropy, where the joint and marginal entropies are 
+	estimated separately via kth-nearest neighbor estimators.
+
+	Parameters
+	----------
+	x : list
+			The time series used to estimate the specific
+			entropy rate.
+
+	p_opt : int
+			The model order used to estimate ler and ser.
+
+	pow_neighbors : float
+			A value in [0, 1] that determines the number of
+			nearest neighbors to use in estimating the 
+			the local entropy rate.
+	is_multirealization : boolean
+			Is the time series a single realization or 
+			multiple realizations?
+
+	Returns
+	-------
+	ler : numpy.array
+			The local entropy rate estimated using kth-nearest
+			neighbor estimators.
+
+			Will be length len(x) - p_opt.
+
+	Notes
+	-----
+	Any notes go here.
+
+	Examples
+	--------
+	>>> import module_name
+	>>> # Demonstrate code here.
+
+	"""
+
+	Lp_norm = 2
+
+	X = embed_ts(x, p_opt, is_multirealization = is_multirealization)
+
+	n_neighbors = int(numpy.ceil(numpy.power(X.shape[0] - 1, pow_neighbors)))
+
+	distances_marg, distances_joint = compute_nearest_neighbors(X, n_neighbors, Lp_norm = Lp_norm)
+
+	er_knn, ler_knn = estimate_ter(n_neighbors, distances_marg, distances_joint, p_opt, Lp_norm)
+
+	return ler_knn
+
 def estimate_ser_insample(x, ler, p_opt, q = 0, pow_neighbors = 0.75):
 	"""
 	Estimate the specific entropy rate in-sample by smoothing
