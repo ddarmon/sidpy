@@ -250,6 +250,285 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, nn_package = 'sklear
 
 	return p_opt, nlpl_opt, nlpl_by_p, er_knn, ler_knn
 
+def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_upperbound = 0.5, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
+	"""
+	choose_model_order_io_nlpl computes the negative log-predictive 
+	likelihood (NLPL) of a k-nearest neighbor predictor for the output of 
+	the input-output system (y, x) where y is the nominal input and x is
+	the nominal output.
+
+	Parameters
+	----------
+	y : list or numpy.array
+			The nominal input time series as a list (if is_multirealization == False)
+			or a numpy.array (if is_multirealization == True).
+	x : list or numpy.array
+			The nominal output time series as a list (if is_multirealization == False)
+			or a numpy.array (if is_multirealization == True).
+	q_max : int
+			The maximum model order to consider for the input process.
+	p_fix : int
+			The value to fix the model order of the output process.
+			For the Self-Predictively Optimal (SPO) version of
+			transfer entropy, this should be fixed at the optimal
+			model order for predicting the future of the output 
+			process without knowledge of the input process.
+	p_max : int
+			The maximum model order to consider for the output process,
+			if p_fix == None.
+	power_upperbound : float
+			A number in [0, 1] that determines the upper bound
+			on the number of nearest neighbors to consider 
+			for the k-nearest neighbor estimator.
+	nn_package : string
+			The package used to compute the nearest neighbors,
+			one of {'sklearn', 'pyflann'}. sklearn is an exact
+			nearest neighbor search, while pyflann is an
+			approximate (and non-deterministic) nearest neighbor
+			search.
+	is_multirealization : boolean
+			Is the time series x given as 
+			a single long time series, or in a 
+			realization-by-realization format 
+			where each row corresponds to a single
+			realization?
+	announce_stages : boolean
+			Whether or not to announce the stages of the estimation
+			of the MSE.
+
+	output_verbose : boolean
+			Whether or not to output the MSE per model order.
+
+	Returns
+	-------
+	q_opt : int
+			The input model order that minimized the MSE.
+	p_opt : int
+			The output model order that minimized the MSE,
+			or p_fix if p_fix != None.
+	nlpl_opt : float
+			The minimized value NLPL(q_opt,p_opt).
+	nlpl_by_qp : list
+			The NLPL as a function of the model orders.
+	kstar_by_qp : list
+			The tuned values of k to use for the
+			k-nearest neighbor predictor as a function
+			of the model orders.
+
+	"""
+
+	if p_fix == None and p_max == None:
+		p_max = q_max
+		ps = range(0, p_max + 1)
+	elif p_fix != None:
+		p_max = p_fix
+		ps = [p_fix]
+	else:
+		ps = range(0, p_max + 1)
+
+
+	qs = range(0, q_max + 1)
+
+	# Check that pow_upperbound \in [0, 1]
+
+	assert pow_upperbound >= 0 and pow_upperbound <= 1, 'pow_upperbound must be a floating point number in [0, 1].'
+
+	# Normalize the data to have sample mean 0 and
+	# sample standard deviation 1.
+
+	x_std = x.std()
+
+	x = (x - x.mean())/x_std
+
+	y = (y - y.mean(axis = None))/y.std(axis = None)
+
+	Lp_norm = 2.
+
+	# Embed the input and output time series using a maximum 
+	# model orders of q_max and p_max, respectively.
+
+	r_max = numpy.max([p_max, q_max])
+
+	Y_full = embed_ts(y, r_max, is_multirealization = is_multirealization)
+	X_full = embed_ts(x, r_max, is_multirealization = is_multirealization)
+
+	# Compute the NLPL as a function of q and p.
+
+	nlpl_by_qp = numpy.empty((len(qs), len(ps)))
+
+	nlpl_by_qp.fill(numpy.nan)
+
+	for p_ind in range(len(ps)):
+		p_use = ps[p_ind]
+		for q_ind in range(len(qs)):
+			q_use = qs[q_ind]
+
+			if p_use == 0 and q_use == 0:
+				Z_train = X_full[:, -1].reshape(-1, 1)
+
+				n_for_marg = 5
+
+				if nn_package == 'pyflann':
+					flann = pyflann.FLANN()
+
+					neighbor_inds_train, distances_marg_train = flann.nn(Z_train,Z_train,n_for_marg + 1);
+
+					neighbor_inds_train = neighbor_inds_train[:, 1:]
+
+					distances_marg_train = distances_marg_train[:, 1:]
+					distances_marg_train = numpy.sqrt(distances_marg_train) # Since FLANN returns the *squared* Euclidean distance.
+				elif nn_package == 'sklearn':
+					knn = neighbors.NearestNeighbors(n_for_marg, algorithm = 'kd_tree', p = Lp_norm)
+
+					knn_out = knn.fit(Z_train)
+
+					distances_marg_train, neighbor_inds_train = knn_out.kneighbors()
+				else:
+					assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
+
+				N = distances_marg_train.shape[0]
+
+				lh_memoryless = numpy.log(distances_marg_train[:, n_for_marg-1]) + numpy.log(N) - digamma(n_for_marg) + numpy.log(2)
+
+				lh_memoryless += numpy.log(x_std)
+				h_memoryless = numpy.mean(lh_memoryless)
+
+				nlpl_by_qp[q_ind, p_ind] = h_memoryless
+			else:
+				Y = Y_full[:, (r_max-q_use):-1]
+				X = X_full[:, (r_max-p_use):]
+
+				# Consider doing this via accessing a Z_full array 
+				# rather than continuously stacking Y and X arrays.
+				Z = numpy.concatenate((Y, X), axis = 1)
+
+				X_train = Z
+
+				n_neighbors = int(numpy.ceil(numpy.power(X_train.shape[0] - 1, pow_upperbound)))
+
+				n_neighbors_upperbound = n_neighbors
+
+				Z_train = X_train
+
+				if announce_stages:
+					print 'Computing nearest neighbor distances using k_upper = {}...'.format(n_neighbors)
+
+				# Compute the nearest neighbor distances and nearest neighbor indices
+				# using pyflann in the marginal (past) space.
+
+				# Note that flann.nn takes a training and evaluation set, so we skip over the 
+				# nearest neighbor, which corresponds to the evaluation point itself.
+
+				Z_train = X_train[:, :-1]
+
+				if nn_package == 'pyflann':
+					flann = pyflann.FLANN()
+
+					neighbor_inds_train, distances_marg_train = flann.nn(Z_train,Z_train,n_neighbors + 1);
+
+					neighbor_inds_train = neighbor_inds_train[:, 1:]
+					# Prior to 141217, this was:
+					# distances_marg_train = distances_marg_train[1:]
+					# which is incorrect. So why didn't it break more of the code?
+					# Should be:
+					distances_marg_train = distances_marg_train[:, 1:]
+
+					distances_marg_train = numpy.sqrt(distances_marg_train) # Since FLANN returns the *squared* Euclidean distance.
+				elif nn_package == 'sklearn':
+					knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+
+					knn_out = knn.fit(Z_train)
+
+					distances_marg_train, neighbor_inds_train = knn_out.kneighbors()
+				else:
+					assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
+
+				if announce_stages:
+					print 'Done computing nearest neighbor distances...'
+
+				# Compute the distances between the future points, in the same
+				# order as neighbor_inds_train, so that Dtrain_sorted is
+				# is pre-sorted from nearest past point to furthest past point.
+
+				Dtrain_sorted = numpy.zeros((n_neighbors, X_train.shape[0]), order = 'F')
+
+				if announce_stages:
+					print 'Computing distances in future space...'
+
+				for ei in range(X_train.shape[0]):
+					xi = X_train[ei, -1]
+
+					Dtrain_sorted[:, ei] = numpy.power(xi - X_train[neighbor_inds_train[ei, :], -1], 2)
+
+				Dtrain_sorted = -0.5*Dtrain_sorted
+
+				if announce_stages:
+					print 'Done computing distances in future space...'
+
+				if announce_stages:
+					print 'Tuning bandwidth and nearest neighbor index...'
+
+				# Use the Silverman rule of thumb bandwidth as the 
+				# initial guess at the bandwidth.
+
+				h = 1.06*numpy.power(Z_train.shape[0], -1./(5))
+
+				# Need to define a local objective function since 
+				# nlopt expects the the objective function to only
+				# take the parameters and a gradient as arguments,
+				# and we need to pass the data.
+
+				def local_score_data(q, grad):
+					return score_data(q, Dtrain_sorted)
+
+				# Set various parameters of the optimizer from nlopt:
+
+				opt = nlopt.opt(nlopt.LN_NELDERMEAD, 2) # Use Nelder-Mead for a 2-parameter optimization problem.
+				opt.set_min_objective(local_score_data) # Set the objective function to be minimized
+				opt.set_lower_bounds([1e-5, 1.]) # Lowerbound for h and k
+				opt.set_upper_bounds([10., n_neighbors_upperbound]) # Upperbound for h and k
+				opt.set_ftol_rel(0.0000001) # Set the stopping criterion for the relative tolerance. Think of this as the number of 'significant digits' in the function minima.
+
+				# opt.get_ftol_rel() # Check that opt.set_ftol_rel worked.
+
+				# Initialize the parameter values with the pilot bandwidth and 
+				# half the upper bound of nearest neighbors, and run the
+				# optimization.
+
+				x_opt = opt.optimize([h, n_neighbors_upperbound/2.])
+
+				h_opt = x_opt[0]
+				k_opt = int(numpy.ceil(x_opt[1]))
+
+				if n_neighbors_upperbound - k_opt <= 10:
+					print "####################################################\n# Warning: For p = {}, Nelder-Mead is choosing k* near k_upper = {}.\n# Increase pow_upperbound.\n####################################################""".format(p_use, n_neighbors_upperbound)
+
+				if announce_stages:
+					print 'Done tuning bandwidth and nearest neighbor index...'
+
+				if announce_stages:
+					print 'Scoring data (k_upper = {}):'.format(n_neighbors_upperbound)
+
+				# Compute the NLPL at the optimal values of the bandwidth and
+				# nearest neighbor number.
+
+				nlpl_insample = score_data(x_opt,Dtrain_sorted)
+				nlpl_insample = nlpl_insample + numpy.log(x_std)
+
+				if announce_stages:
+					print 'Done scoring data (k_upper = {}):'.format(n_neighbors_upperbound)
+
+				if output_verbose:
+					print 'For (q = {}, p = {}) chose k* = {} with NLPL(k*) = {}'.format(q_use, p_use, k_opt, nlpl_insample)
+
+				nlpl_by_qp[q_ind, p_ind] = nlpl_insample
+
+	q_opt_ind, p_opt_ind = numpy.unravel_index(numpy.nanargmin(nlpl_by_qp, axis = None), nlpl_by_qp.shape)
+
+	nlpl_opt = numpy.min(nlpl_by_qp, axis = None)
+
+	return qs[q_opt_ind], ps[p_opt_ind], nlpl_opt, nlpl_by_qp
+
 def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
 	"""
 	choose_model_order_mse computes the mean-squared error (MSE) of a k-nearest 
@@ -436,7 +715,7 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 			The output model order that minimized the MSE,
 			or p_fix if p_fix != None.
 	mse_opt : float
-			The minimized value NLPL(p_opt).
+			The minimized value MSE(q_opt,p_opt).
 	mse_by_qp : list
 			The MSE as a function of the model orders.
 	kstar_by_qp : list
@@ -472,7 +751,7 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 	Y_full = embed_ts(y, r_max, is_multirealization = is_multirealization)
 	X_full = embed_ts(x, r_max, is_multirealization = is_multirealization)
 
-	# Compute the NLPL as a function of p.
+	# Compute the MSE as a function of q and p.
 
 	mse_by_qp = numpy.empty((len(qs), len(ps)))
 	kstar_by_qp = numpy.empty((len(qs), len(ps)))
