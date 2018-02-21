@@ -1186,11 +1186,11 @@ def estimate_lce_insample(X, pow_neighbors = 0.75, n_neighbors = None):
 	if n_neighbors is None:
 		n_neighbors = int(numpy.ceil(numpy.power(X.shape[0] - 1, pow_neighbors)))
 	else:
-		print("Warning: Overriding pow_upperbound to take n_neighbors = {}".format(n_neighbors))
+		print("Warning: Overriding pow_neighbors to take n_neighbors = {}".format(n_neighbors))
 
 	distances_marg, distances_joint = compute_nearest_neighbors(X, n_neighbors, Lp_norm = Lp_norm)
 
-	er_knn, ler_knn = estimate_ter(n_neighbors, distances_marg, distances_joint, p_opt, Lp_norm)
+	er_knn, ler_knn = estimate_ter(n_neighbors, distances_marg, distances_joint, X.shape[1] - 1, Lp_norm)
 
 	return ler_knn
 
@@ -1643,11 +1643,93 @@ def estimate_lte(y, x, q, p, delay, k = 5):
 	# a length N*(T - r) array that concatenates
 	# the estimated local transfer entropies.
 
+	r = numpy.max([p, q + delay])
+
 	if len(lTEs.shape) == 1:
-		r = numpy.max([p, q + delay])
 		lTEs[:r] = numpy.nan
 	else:
-		lTEs = stack_sid_by_trial(lTEs, q, p, delay, num_trials = x.shape[0], points_per_trial = x.shape[1])
+		lTEs = stack_sid_by_trial(lTEs, r, num_trials = x.shape[0], points_per_trial = x.shape[1])
+
+	return lTEs, TE
+
+def estimate_lte_iopo(y, x, q, p_io, p_o, delay, k = 5):
+	"""
+	Estimate the local transfer entropy from y to x with autoregressive
+	order q for y and p for x, and a time delay from y to x of delay.
+
+	The local transfer entropy is the expectand of the
+	total transfer entropy. Here, we estimate the local entropy rates
+	for the output-only and input-output autorgressive model separately,
+	rather than use the conditional mutual information definition
+	in the SPO formulation of transfer entropy.
+	
+
+	Parameters
+	----------
+	y : numpy.array
+			The nominal input process.
+	x : numpy.array
+			The nominal output process.
+	q : int
+			The autoregressive order for the nominal input process.
+	p_io : int
+			The autoregressive order for the nominal output process
+			when including the input.
+	p_o : int
+			The autoregressive order for the nominal output process
+			when excluding the input.
+	delay : int
+			The time delay to use for the input process, where
+			delay = 0 would give the standard (non-delayed) 
+			transfer entropy.
+	k : int
+			The number of nearest neighbors to use in estimating
+			the local transfer entropy.
+
+	Returns
+	-------
+	r : int
+			description
+
+	Notes
+	-----
+	Any notes go here.
+
+	Examples
+	--------
+	>>> import module_name
+	>>> # Demonstrate code here.
+
+	"""
+
+	# Automatically convert to multi-trial/realization
+	# representation, even if x is just a single trial.
+
+	if len(x.shape) == 1:
+		x = x.reshape(1, -1)
+		y = y.reshape(1, -1)
+
+	r = numpy.max([q + delay, p_io, p_o])
+
+	Y = embed_ts(y, r, is_multirealization = True)
+	X = embed_ts(x, r, is_multirealization = True)
+
+	Yt = Y[:, r - q:r]
+	Xt = X[:, r - p_io:]
+
+	Z = numpy.concatenate((Yt, Xt), 1)
+
+	ler_io = estimate_lce_insample(Z, pow_neighbors = None, n_neighbors = k)
+
+	Z = X[:, r - p_o:]
+
+	ler_o =  estimate_lce_insample(Z, pow_neighbors = None, n_neighbors = k)
+
+	lTEs = ler_o - ler_io
+
+	lTEs = stack_sid_by_trial(lTEs, r, num_trials = x.shape[0], points_per_trial = x.shape[1])
+
+	TE = numpy.nanmean(lTEs)
 
 	return lTEs, TE
 
@@ -1845,7 +1927,7 @@ def stack_io(y, x, q, p, delay):
 
 	return Z
 
-def stack_sid_by_trial(sid, q, p, delay, num_trials, points_per_trial):
+def stack_sid_by_trial(sid, r, num_trials, points_per_trial):
 	"""
 	stack_sid_by_trial stacks the specific information dynamic measure
 	in a trial-by-trial / realization-by-realization numpy array. This
@@ -1857,16 +1939,9 @@ def stack_sid_by_trial(sid, q, p, delay, num_trials, points_per_trial):
 	sid : numpy.array
 			The specific information dynamic measure to reformat
 			into the proper trial-by-trial numpy.array.
-	q : int
-			The autoregressive order for the nominal input process.
-	p : int
-			The autoregressive order for the nominal output process.
-	delay : int
-			The time delay to use for the input process, where
-			delay = 0 would give the standard (non-delayed) 
-			transfer entropy, delay = -1 gives a
-			contemporaneous transfer entropy, and delay > 0
-			gives a delayed transfer entropy.
+	r : int
+			The maximum lag to use, typically 
+			max {p_io, p_o, q + delay},
 			
 
 	Returns
@@ -1886,8 +1961,6 @@ def stack_sid_by_trial(sid, q, p, delay, num_trials, points_per_trial):
 	>>> # Demonstrate code here.
 
 	"""
-
-	r = numpy.max([p, q + delay])
 
 	points_per_truncated_trial = points_per_trial - r
 
@@ -1982,7 +2055,109 @@ def estimate_ste(y, x, q, p, delay, lTEs, pow_neighbors = 0.5, verbose = False):
 	if verbose:
 		print 'Storing sTEs by trial...'
 
-	sTEs_by_trial = stack_sid_by_trial(sTEs, q, p, delay, num_trials = x.shape[0], points_per_trial = x.shape[1])
+	r = numpy.max([q + delay, p])
+
+	sTEs_by_trial = stack_sid_by_trial(sTEs, r, num_trials = x.shape[0], points_per_trial = x.shape[1])
+
+	if x.shape[0] == 1:
+		sTEs = sTEs_by_trial.flatten()
+	else:
+		sTEs = sTEs_by_trial
+
+	return sTEs
+
+
+def estimate_ste_iopo(y, x, q, p_io, p_o, delay, lTEs, pow_neighbors = 0.5, verbose = False):
+	"""
+	estimate_ste_iopo estimates the specific transfer entropy by 
+	smoothing the local transfer entropy estimates against the delay vectors
+	using a k-nearest neighbor smoother.
+
+	Because p_io =/= p_o, this can be used with the local transfer entropies
+	estimated under the Input-Output-Predictively Optimal (IOPO) formulation
+	in addition to under the Self-Predictively Optimal (SPO) formulation.
+
+	Parameters
+	----------
+	y : numpy.array
+			The nominal input process.
+	x : numpy.array
+			The nominal output process.
+	q : int
+			The autoregressive order for the nominal input process.
+	p_io : int
+			The autoregressive order for the nominal output process,
+			including the nominal input process.
+	p_o : int
+			The autoregressive order for the nominal output process,
+			excluding the nominal input process.
+	delay : int
+			The time delay to use for the input process, where
+			delay = 0 would give the standard (non-delayed) 
+			transfer entropy, delay = -1 gives a
+			contemporaneous transfer entropy, and delay > 0
+			gives a delayed transfer entropy.
+	lTEs : numpy.array
+			The estimated lTEs returned by estimate_lte.
+	pow_neighbors : float
+			A value in [0, 1] that determines the number of
+			nearest neighbors to use in the regression of
+			the local transfer entropy on the delay vectors.
+	verbose : boolean
+			Whether or not to announce the steps in estimate_ste.
+			
+
+	Returns
+	-------
+	sTEs_by_trial : numpy.array
+			The estimated specific transfer entropies per-trial.
+	lTEs_by_trial : numpy.array
+			The estimated local transfer entropies per-trial.
+
+	Notes
+	-----
+	Any notes go here.
+
+	Examples
+	--------
+	>>> import module_name
+	>>> # Demonstrate code here.
+
+	"""
+
+	if verbose:
+		print 'Storing LTEs by trial...'
+
+	r = numpy.max([p_io, p_o, q + delay])
+
+	if len(x.shape) == 1:
+		x = x.reshape(1, -1)
+		y = y.reshape(1, -1)
+
+	if len(lTEs.shape) == 1:
+		lTEs  = embed_ts(lTEs, r, is_multirealization = False)
+	else:
+		lTEs  = embed_ts(lTEs, r, is_multirealization = True)
+
+	if verbose:
+		print 'Computing sTEs...'
+
+	Z = stack_io(y, x, q, numpy.max([p_io, p_o]), delay)
+
+	n_neighbors = int(numpy.floor(numpy.power(Z.shape[0], pow_neighbors)))
+
+	knn = neighbors.KNeighborsRegressor(n_neighbors, weights='uniform')
+
+	knn_out = knn.fit(Z[:, :-1], lTEs[:, -1])
+
+	sTEs = knn_out.predict(Z[:, :-1])
+
+	points_per_truncated_trial = x.shape[1] - r
+
+	if verbose:
+		print 'Storing sTEs by trial...'
+
+	sTEs_by_trial = stack_sid_by_trial(sTEs, r, num_trials = x.shape[0], points_per_trial = x.shape[1])
 
 	if x.shape[0] == 1:
 		sTEs = sTEs_by_trial.flatten()
