@@ -1131,6 +1131,69 @@ def estimate_ler_insample(x, p_opt, pow_neighbors = 0.75, is_multirealization = 
 
 	return ler_knn
 
+def estimate_lce_insample(X, pow_neighbors = 0.75, n_neighbors = None):
+	"""
+	Estimate the local conditional entropy using distances between kth-nearest
+	neighbors in the marginal and joint spaces, using the estimator
+
+	\hat{h}[Y | C] = \hat{h}[C, Y] - \hat{h}[C],
+
+	e.g. the conditional local entropy equals the joint local entropy minus
+	the marginal local entropy, where the joint and marginal entropies are 
+	estimated separately via kth-nearest neighbor estimators.
+
+	At present, this assumes that Y is a scalar and C is a vector or scalar.
+
+	Parameters
+	----------
+	X : numpy.array
+			The data matrix where the final / right-most column 
+			corresponds to Y and the preceding columns
+			correspond to C.
+	pow_neighbors : float
+			A value in [0, 1] that determines the number of
+			nearest neighbors to use in estimating the 
+			the local entropy rate.
+	n_neighbors : int
+			The number of neighbors to use. Defaults to
+			using the value calculated from pow_neighbors
+			unless specified
+	is_multirealization : boolean
+			Is the time series a single realization or 
+			multiple realizations?
+
+	Returns
+	-------
+	lce : numpy.array
+			The local entropy rate estimated using kth-nearest
+			neighbor estimators.
+
+			Will have shape (X.shape[0], ).
+
+	Notes
+	-----
+	Any notes go here.
+
+	Examples
+	--------
+	>>> import module_name
+	>>> # Demonstrate code here.
+
+	"""
+
+	Lp_norm = 2
+
+	if n_neighbors is None:
+		n_neighbors = int(numpy.ceil(numpy.power(X.shape[0] - 1, pow_neighbors)))
+	else:
+		print("Warning: Overriding pow_upperbound to take n_neighbors = {}".format(n_neighbors))
+
+	distances_marg, distances_joint = compute_nearest_neighbors(X, n_neighbors, Lp_norm = Lp_norm)
+
+	er_knn, ler_knn = estimate_ter(n_neighbors, distances_marg, distances_joint, p_opt, Lp_norm)
+
+	return ler_knn
+
 def estimate_ser_insample(x, ler, p_opt, q = 0, pow_neighbors = 0.75):
 	"""
 	Estimate the specific entropy rate in-sample by smoothing
