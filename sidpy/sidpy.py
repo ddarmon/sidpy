@@ -1185,8 +1185,8 @@ def estimate_lce_insample(X, pow_neighbors = 0.75, n_neighbors = None):
 
 	if n_neighbors is None:
 		n_neighbors = int(numpy.ceil(numpy.power(X.shape[0] - 1, pow_neighbors)))
-	else:
-		print("Warning: Overriding pow_neighbors to take n_neighbors = {}".format(n_neighbors))
+	# else:
+	# 	print("Warning: Overriding pow_neighbors to take n_neighbors = {}".format(n_neighbors))
 
 	distances_marg, distances_joint = compute_nearest_neighbors(X, n_neighbors, Lp_norm = Lp_norm)
 
