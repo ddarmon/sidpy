@@ -1523,6 +1523,7 @@ def smooth(x,window_len=11,window='hanning'):
 	return y
 
 def estimate_lte(y, x, q, p, delay, k = 5):
+	#tmp_lte, tmp_tte = estimate_lte(y, x, q_IO, p_O, delay = 0, k = 5)
 	"""
 	Estimate the local transfer entropy from y to x with autoregressive
 	order q for y and p for x, and a time delay from y to x of delay.
@@ -1645,7 +1646,7 @@ def estimate_lte(y, x, q, p, delay, k = 5):
 
 	r = numpy.max([p, q + delay])
 
-	if len(lTEs.shape) == 1:
+	if x.shape[0] == 1:
 		lTEs[:r] = numpy.nan
 	else:
 		lTEs = stack_sid_by_trial(lTEs, r, num_trials = x.shape[0], points_per_trial = x.shape[1])
