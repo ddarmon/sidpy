@@ -1,5 +1,5 @@
-sidpy
-=====
+sidpy: Python Tools for Specific Information Dynamics
+=====================================================
 
 What is sidpy?
 ---------------

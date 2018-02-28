@@ -1587,9 +1587,9 @@ def estimate_lte(y, x, q, p, delay, k = 5):
 	#
 	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-	# NOTE: Need infodynamics.jar in the Applications folder for this to work!
+	# NOTE: Need infodynamics.jar in the appropriate directory for this to work!
 
-	jarLocation = "/Applications/infodynamics.jar"
+	jarLocation = "../jidt/infodynamics.jar"
 
 	if not isJVMStarted():
 		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
@@ -1795,9 +1795,9 @@ def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
 	#
 	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-	# NOTE: Need infodynamics.jar in the Applications folder for this to work!
+	# NOTE: Need infodynamics.jar in the appropriate directory for this to work!
 
-	jarLocation = "/Applications/infodynamics.jar"
+	jarLocation = "../jidt/infodynamics.jar"
 
 	if not isJVMStarted():
 		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
