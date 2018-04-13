@@ -2,6 +2,7 @@ import scipy.special
 import numpy
 
 from sklearn import neighbors
+from sklearn.metrics import pairwise
 
 import pyflann
 import nlopt
@@ -12,7 +13,7 @@ import string
 gamma = scipy.special.gamma
 digamma = scipy.special.digamma
 
-def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True, suppress_warning = False):
+def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_procedure = 'knn', nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True, suppress_warning = False):
 	"""
 	choose_model_order_nlpl computes the negative log-predictive likelihood (NLPL)
 	of the  data for varying model orders via a kernel nearest neighbor estimator
@@ -29,6 +30,13 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, nn_package = 'sklear
 			A number in [0, 1] that determines the upper bound
 			on the number of nearest neighbors to consider 
 			for the kernel nearest neighbor estimator.
+	marginal_estimation_procedure : string
+			The estimation procedure used to estimate the 
+			differential entropy of x. One of {'knn', 'kde'},
+			where 'knn' uses the standard k-nearest neighbor
+			estimator of the differential entropy, and 'kde'
+			uses a kernel density estimator with the bandwidth
+			chosen to minimize the negative log-likelihood.
 	nn_package : string
 			The package used to compute the nearest neighbors,
 			one of {'sklearn', 'pyflann'}. sklearn is an exact
@@ -131,19 +139,57 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, nn_package = 'sklear
 			assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
 
 		if p_use == 1:
-			n_for_marg = 5
+			if marginal_estimation_procedure == 'knn':
+				n_for_marg = 5
 
-			N = distances_marg_train.shape[0]
+				N = distances_marg_train.shape[0]
 
-			lh_memoryless = numpy.log(distances_marg_train[:, n_for_marg-1]) + numpy.log(N) - digamma(n_for_marg) + numpy.log(2)
+				lh_memoryless = numpy.log(distances_marg_train[:, n_for_marg-1]) + numpy.log(N) - digamma(n_for_marg) + numpy.log(2)
 
-			lh_memoryless += numpy.log(x_std)
-			h_memoryless = numpy.mean(lh_memoryless)
+				lh_memoryless += numpy.log(x_std)
+				h_memoryless = numpy.mean(lh_memoryless)
 
-			nlpl_by_p += [h_memoryless]
+				nlpl_by_p.append(h_memoryless)
 
-			if output_verbose:
-				print 'For p = 0, with NLPL(k = {}) = {}'.format(n_for_marg, h_memoryless)
+				if output_verbose:
+					print 'For p = 0, with NLPL(k = {}) = {}'.format(n_for_marg, h_memoryless)
+			elif marginal_estimation_procedure == 'kde':
+				def local_score_data_marginal(q, grad):
+					return score_data_marginal(q, D)
+
+				distances = pairwise.pairwise_distances(x[p_max:].reshape(-1, 1), Y=None, metric="euclidean")
+
+				numpy.fill_diagonal(distances, numpy.nan)
+
+				hstart = 1.06*numpy.power(x.shape[0], -1./(5))
+
+				D = -0.5*distances**2
+
+				# Set various parameters of the optimizer from nlopt:
+
+				opt = nlopt.opt(nlopt.LN_NELDERMEAD, 1) # Use Nelder-Mead
+				opt.set_min_objective(local_score_data_marginal) # Set the objective function to be minimized
+				opt.set_lower_bounds([1e-5]) # Lowerbound for h
+				opt.set_upper_bounds([10.]) # Upperbound for h
+				opt.set_ftol_rel(0.0001) # Set the stopping criterion for the relative tolerance. Think of this as the number of 'significant digits' in the function minima.
+
+				# Initialize the parameter values with the pilot bandwidth and 
+				# half the upper bound of nearest neighbors, and run the
+				# optimization.
+
+				x_opt = opt.optimize([hstart])
+
+				hopt = x_opt[0]
+
+				# Compute the differential entropy estimate, being sure to rescale back to
+				# the appropriate sample standard deviation.
+
+				er_marginal, ler_marginal = estimate_ler_marginal([hopt], D)
+
+				h_memoryless =  er_marginal + numpy.log(x_std)
+				lh_memoryless = ler_marginal + numpy.log(x_std)
+
+				nlpl_by_p.append(h_memoryless)
 
 		if announce_stages:
 			print 'Done computing nearest neighbor distances...'
@@ -224,7 +270,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, nn_package = 'sklear
 		if output_verbose:
 			print 'For p = {}, with NLPL(h* = {}, k* = {}) = {}'.format(p_use, h_opt, k_opt, nlpl_insample)
 
-		nlpl_by_p += [nlpl_insample]
+		nlpl_by_p.append(nlpl_insample)
 
 	p_opt = numpy.argmin(nlpl_by_p)
 	nlpl_opt = numpy.min(nlpl_by_p)
@@ -1007,6 +1053,100 @@ def score_data(q, D, verbose = False):
 		print h, q[1], n_neighbors, nlpl
 
 	return nlpl
+
+def score_data_marginal(q, D, verbose = False):
+	"""
+	score_data_marginal computes the negative log-
+	likelihood of the marginal data using a kernel
+	density estimator.
+
+	score_data_marginal is set up to run with nlopt.
+
+	Parameters
+	----------
+	q : list
+			The parameters of the 
+
+			q[0] = the bandwidth in the future space
+
+	D : numpy.array
+			-0.5 * (squared distance) from an evaluation point
+			to an example point, used in the exponenet of the
+			kernel for the kernel density estimator.
+
+	verbose : boolean
+			Whether to output the parameters and NLPL on each call of
+			score_data_marginal.
+
+	Returns
+	-------
+	nlpl : float
+			The negative log-likelihood of the data using
+			the kernel density estimator.
+
+	"""
+	h = q[0]
+
+	C = 1/(numpy.sqrt(2*numpy.pi)*h)
+
+	K = C*numpy.exp(D/(h**2))
+
+	fs = numpy.nanmean(K, 0)
+	log_fs = numpy.log(fs)
+
+	# Without removing infinite entries:
+	nlpl = -numpy.mean(log_fs) # Unweighted TER
+
+	if verbose:
+		print h, nlpl
+
+	return nlpl
+
+def estimate_ler_marginal(q, D, verbose = False):
+	"""
+	estimate_ler_marginal computes the local entropy using the
+	marginal density via a kernel density estimator.
+
+	Parameters
+	----------
+	q : list
+			The parameters of the 
+
+			q[0] = the bandwidth in the future space
+
+	D : numpy.array
+			-0.5 * (squared distance) from an evaluation point
+			to an example point, used in the exponenet of the
+			kernel for the kernel density estimator.
+
+	verbose : boolean
+			Whether to output the parameters and NLPL on each call of
+			score_data_marginal.
+
+	Returns
+	-------
+	er : float
+			The average of the local entropies, an estimator for the 
+			the total entropy.
+	ler : numpy.array
+			The local entropy at each of the evaluation points.
+
+	"""
+	h = q[0]
+
+	C = 1/(numpy.sqrt(2*numpy.pi)*h)
+
+	K = C*numpy.exp(D/(h**2))
+
+	fs = numpy.nanmean(K, 0)
+	log_fs = numpy.log(fs)
+
+	ler = -log_fs
+
+	# Without removing infinite entries:
+	er = numpy.mean(ler) # Unweighted TER
+
+	return er, ler
 
 def estimate_ter(n_neighbors, distances_marg, distances_joint, d, Lp_norm):
 	"""
