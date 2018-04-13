@@ -12,7 +12,7 @@ import string
 gamma = scipy.special.gamma
 digamma = scipy.special.digamma
 
-def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
+def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True, suppress_warning = False):
 	"""
 	choose_model_order_nlpl computes the negative log-predictive likelihood (NLPL)
 	of the  data for varying model orders via a kernel nearest neighbor estimator
@@ -142,7 +142,8 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, nn_package = 'sklear
 
 			nlpl_by_p += [h_memoryless]
 
-			print 'For p = 0, with NLPL(k = {}) = {}'.format(n_for_marg, h_memoryless)
+			if output_verbose:
+				print 'For p = 0, with NLPL(k = {}) = {}'.format(n_for_marg, h_memoryless)
 
 		if announce_stages:
 			print 'Done computing nearest neighbor distances...'
@@ -201,8 +202,9 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, nn_package = 'sklear
 		h_opt = x_opt[0]
 		k_opt = int(numpy.ceil(x_opt[1]))
 
-		if n_neighbors_upperbound - k_opt <= 10:
-			print "####################################################\n# Warning: For p = {}, Nelder-Mead is choosing k* near k_upper = {}.\n# Increase pow_upperbound.\n####################################################""".format(p_use, n_neighbors_upperbound)
+		if not suppress_warning:
+			if n_neighbors_upperbound - k_opt <= 10:
+				print "####################################################\n# Warning: For p = {}, Nelder-Mead is choosing k* near k_upper = {}.\n# Increase pow_upperbound.\n####################################################""".format(p_use, n_neighbors_upperbound)
 
 		if announce_stages:
 			print 'Done tuning bandwidth and nearest neighbor index...'
@@ -1072,7 +1074,7 @@ def estimate_ter(n_neighbors, distances_marg, distances_joint, d, Lp_norm):
 
 	return ter, ler
 
-def estimate_ler_insample(x, p_opt, pow_neighbors = 0.75, is_multirealization = False):
+def estimate_ler_insample(x, p_opt, pow_neighbors = 0.75, n_neighbors = None, is_multirealization = False):
 	"""
 	Estimate the local entropy rate using distances between kth-nearest
 	neighbors in the marginal and joint spaces, using the estimator
@@ -1096,6 +1098,8 @@ def estimate_ler_insample(x, p_opt, pow_neighbors = 0.75, is_multirealization = 
 			A value in [0, 1] that determines the number of
 			nearest neighbors to use in estimating the 
 			the local entropy rate.
+	n_neighbors : int
+			The number of nearest neighbors to use.
 	is_multirealization : boolean
 			Is the time series a single realization or 
 			multiple realizations?
@@ -1123,7 +1127,8 @@ def estimate_ler_insample(x, p_opt, pow_neighbors = 0.75, is_multirealization = 
 
 	X = embed_ts(x, p_opt, is_multirealization = is_multirealization)
 
-	n_neighbors = int(numpy.ceil(numpy.power(X.shape[0] - 1, pow_neighbors)))
+	if n_neighbors is None:
+		n_neighbors = int(numpy.ceil(numpy.power(X.shape[0] - 1, pow_neighbors)))
 
 	distances_marg, distances_joint = compute_nearest_neighbors(X, n_neighbors, Lp_norm = Lp_norm)
 
@@ -1263,7 +1268,7 @@ def estimate_ser_insample(x, ler, p_opt, q = 0, pow_neighbors = 0.75):
 
 	return ser
 
-def estimate_normalized_qstep_insample(x, p_opt, q, pow_neighbors = 0.75):
+def estimate_normalized_qstep_insample(x, p_opt, q, pow_neighbors = 0.75, return_log_dist_ratio = False):
 	"""
 	Estimate the specific entropy rate in-sample by smoothing
 	the local entropy rate estimates against the delay vectors
@@ -1341,7 +1346,10 @@ def estimate_normalized_qstep_insample(x, p_opt, q, pow_neighbors = 0.75):
 
 	kl_q = knn_out.predict(X_0[:, :-1])
 
-	return kl_q
+	if return_log_dist_ratio == True:
+		return kl_q, log_dist_ratio
+	else:
+		return kl_q
 
 def estimate_ser_outsample(x_train, x_test, ler_train, p_opt, q = 0, pow_neighbors = 0.75):
 	"""
@@ -1403,10 +1411,10 @@ def estimate_ser_outsample(x_train, x_test, ler_train, p_opt, q = 0, pow_neighbo
 	assert len(ler_train) == len(x_train) - (p_opt + q), "Error: Use estimated local entropy rate (ler_train) with the same model order p_opt and predictive horizon q."
 
 	if q == 0:
-		X_train   = embed_ts(x_train, p_opt)
+		X_train = embed_ts(x_train, p_opt)
 		X_test	= embed_ts(x_test, p_opt)
 	else:
-		X_train   = embed_ts_multihorizon(x_train, p_opt, q)
+		X_train = embed_ts_multihorizon(x_train, p_opt, q)
 		X_test	= embed_ts_multihorizon(x_test, p_opt, q)
 
 	n_neighbors = int(numpy.ceil(numpy.power(X_train.shape[0] - 1, pow_neighbors)))
@@ -1418,6 +1426,79 @@ def estimate_ser_outsample(x_train, x_test, ler_train, p_opt, q = 0, pow_neighbo
 	ser = knn_out.predict(X_test[:, :-1])
 
 	return ser
+
+def estimate_normalized_qstep_outsample(x_train, x_test, log_dist_ratio_train, p_opt, q, pow_neighbors = 0.75):
+	"""
+	Estimate the normalized q-step specific entropy rate 
+	out-of-sample by evaluating the regression function estimated
+	using x_train and ler_train at the points given by the delay
+	vectors of x_test.
+
+	NOTE: log_dist_ratio_train should be computed using the same value of 
+	p as p_opt, so log_dist_ratio_train should have length len(x_train) - p_opt.
+
+	Parameters
+	----------
+	x_train : list
+			The in-sample time series used to estimate
+			the specific entropy rate.
+
+	x_test : list
+			The out-of-sample time series used to
+			evaluate the specific entropy rate estimator.
+
+	log_dist_ratio_train : numpy.array
+			The in-sample log of the ratio of distances estimated
+			using p_opt with x_train.
+
+	p_opt : int
+			The model order used to estimate ler_train and ser.
+
+	q : int
+			The predictive horizon that the local entropy rate
+			was estimated over and the specific entropy rate
+			should be estimated over. Should be >= 0.
+
+	pow_neighbors : float
+			A value in [0, 1] that determines the number of
+			nearest neighbors to use in the regression of
+			the local entropy rate on the delay vectors.
+
+	Returns
+	-------
+	kl_q : numpy.array
+			The normalized q-step specific entropy rate estimated as the Kullback-Leibler divergence between the 0-step predictive density and the q-step predictive density with the 0-step predictive density as basline.
+
+			Will be len(x_test) - p_opt - q.
+
+	Notes
+	-----
+	Any notes go here.
+
+	Examples
+	--------
+	>>> import module_name
+	>>> # Demonstrate code here.
+
+	"""
+
+	X_0 = embed_ts_multihorizon(x_train, p_opt, 0)
+
+	X_0_test = embed_ts_multihorizon(x_test, p_opt, 0)
+
+	X_0      = X_0[:-q, :]
+
+	n_neighbors_for_den = 5
+
+	n_neighbors_for_reg = int(numpy.ceil(numpy.power(X_0.shape[0] - 1, pow_neighbors)))
+
+	knn = neighbors.KNeighborsRegressor(n_neighbors_for_reg, weights='uniform')
+
+	knn_out = knn.fit(X_0[:, :-1], log_dist_ratio_train)
+
+	kl_q = knn_out.predict(X_0_test[:, :-1])
+
+	return kl_q
 
 def loocv_mse(n_neighbors, neighbor_inds, X):
 	"""
