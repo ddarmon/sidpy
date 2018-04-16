@@ -10,6 +10,8 @@ import nlopt
 from jpype import *
 import string
 
+import matplotlib.pyplot as plt
+
 gamma = scipy.special.gamma
 digamma = scipy.special.digamma
 
@@ -2387,3 +2389,143 @@ def estimate_ste_iopo(y, x, q, p_io, p_o, delay, lTEs, pow_neighbors = 0.5, verb
 		sTEs = sTEs_by_trial
 
 	return sTEs
+
+def generate_refined_aaft_surrogate(x, seed = None, print_spectra_error = False, to_plot = False):
+	"""
+	Generate refined amplitude adjusted Fourier transform (AAFT) surrogates,
+	following the method from 
+
+	T. Schreiber and A. Schmitz, "Improved Surrogate Data for Nonlinearity Tests,"
+	Phys. Rev. Lett., vol. 77, no. 4, pp. 635-638, Jul. 1996.
+
+	The surrogate time series xstar has the same marginal distribution ('amplitudes')
+	and approximately the same sample spectral density (periodogram) as the original
+	time series x.
+
+	These surrogates are appropriate for testing the null hypothesis that x originates
+	from an invertible, instantaneous transformation of a Gaussian colored noise process.
+
+	Parameters
+	----------
+	x : list or numpy.array
+			The original time series used to generate surrogates.
+	seed : int
+			A seed for numpy's pseudo-random number generator.
+			Must be convertible to 32 bit unsigned integers.
+			If None, then the current state of the PRNG is
+			used.
+	print_spectra_error : boolean
+			Whether to print the mean-squared error between the
+			periodogram of x and the periodogram of xstar.
+	to_plot : boolean
+			Whether or not to plot the time series and its
+			surrogate along with the periodogram for the 
+			time series and its surrogate.
+
+
+	Returns
+	-------
+	xstar : numpy.array
+			The surrogate generated using the refined AAFT
+			method.
+
+	Notes
+	-----
+	Any notes go here.
+
+	Examples
+	--------
+	>>> import module_name
+	>>> # Demonstrate code here.
+
+	"""
+
+	if seed is not None:
+		numpy.random.seed(seed)
+
+	# Sort the original time series and compute
+	# its Fast Fourier Transform, along with the
+	# amplitude and phase of the Fourier transform.
+
+	xsort = numpy.sort(x)
+
+	Xfft = numpy.fft.fft(x)
+
+	Sx = numpy.abs(Xfft)
+	Phasex = numpy.angle(Xfft)
+
+	# Demonstrate that we recover the original
+	# time series by taking the inverse Fourier
+	# transform.
+
+	# Xfft_recover = Sx*numpy.exp(1j*Phasex)
+	# 
+	# xback = numpy.fft.ifft(Xfft)
+
+	# Generate the first iterate of the 
+	# surrogate time series, which is just a
+	# complete randomization (sampling with 
+	# replacement) of the original time series.
+
+	xstar = numpy.copy(x)
+
+	numpy.random.shuffle(xstar)
+
+	# Iterate the refined AAFT procedure:
+
+	num_iterations = 100
+
+	for n in range(num_iterations):
+		# Match the Fourier amplitudes of the original
+		# and surrogate time series while maintaining
+		# the phases.
+
+		Xstarfft = numpy.fft.fft(xstar)
+
+		Phasexstar = numpy.angle(Xstarfft)
+
+		Xstarfft = Sx*numpy.exp(1j*Phasexstar)
+
+		# Recover the surrogate time series from its
+		# Fourier transform.
+
+		xstar = numpy.abs(numpy.fft.ifft(Xstarfft))
+
+		if to_plot and (num_iterations - n) <= 1:
+			plt.figure()
+			plt.plot(x)
+			plt.plot(xstar)
+
+			fig, ax = plt.subplots(2)
+			ax[0].hist(x, bins = 50)
+			ax[1].hist(xstar, bins = 50)
+
+			plt.figure()
+			plt.plot(numpy.abs(numpy.fft.fft(x))[1:x.shape[0]//2])
+			plt.plot(numpy.abs(numpy.fft.fft(xstar))[1:x.shape[0]//2])
+
+		# Recover the time series amplitudes by using
+		# a rank ordering of the surrogate time series.
+
+		order = xstar.argsort()
+		ranks = order.argsort()
+
+		xstar = xsort[ranks]
+
+		if to_plot and (num_iterations - n) <= 1:
+			plt.figure()
+			plt.plot(x)
+			plt.plot(xstar)
+
+			fig, ax = plt.subplots(2)
+			ax[0].hist(x, bins = 50)
+			ax[1].hist(xstar, bins = 50)
+
+			plt.figure()
+			plt.plot(numpy.abs(numpy.fft.fft(x))[1:x.shape[0]//2])
+			plt.plot(numpy.abs(numpy.fft.fft(xstar))[1:x.shape[0]//2])
+
+		if print_spectra_error:
+			print(numpy.mean(numpy.power(numpy.abs(numpy.fft.fft(x)) - numpy.abs(numpy.fft.fft(xstar)), 2)))
+
+	return xstar
