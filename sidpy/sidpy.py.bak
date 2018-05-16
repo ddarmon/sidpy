@@ -108,7 +108,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 		Z_train = X_train
 
 		if announce_stages:
-			print('Computing nearest neighbor distances using k_upper = {}...'.format(n_neighbors))
+			print 'Computing nearest neighbor distances using k_upper = {}...'.format(n_neighbors)
 
 		# Compute the nearest neighbor distances and nearest neighbor indices
 		# using pyflann in the marginal (past) space.
@@ -154,7 +154,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 				nlpl_by_p.append(h_memoryless)
 
 				if output_verbose:
-					print('For p = 0, with NLPL(k = {}) = {}'.format(n_for_marg, h_memoryless))
+					print 'For p = 0, with NLPL(k = {}) = {}'.format(n_for_marg, h_memoryless)
 			elif marginal_estimation_procedure == 'kde':
 				def local_score_data_marginal(q, grad):
 					return score_data_marginal(q, D)
@@ -194,7 +194,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 				nlpl_by_p.append(h_memoryless)
 
 		if announce_stages:
-			print('Done computing nearest neighbor distances...')
+			print 'Done computing nearest neighbor distances...'
 
 		# Compute the distances between the future points, in the same
 		# order as neighbor_inds_train, so that Dtrain_sorted is
@@ -203,7 +203,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 		Dtrain_sorted = numpy.zeros((n_neighbors, X_train.shape[0]), order = 'F')
 
 		if announce_stages:
-			print('Computing distances in future space...')
+			print 'Computing distances in future space...'
 
 		for ei in range(X_train.shape[0]):
 			xi = X_train[ei, -1]
@@ -213,10 +213,10 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 		Dtrain_sorted = -0.5*Dtrain_sorted
 
 		if announce_stages:
-			print('Done computing distances in future space...')
+			print 'Done computing distances in future space...'
 
 		if announce_stages:
-			print('Tuning bandwidth and nearest neighbor index...')
+			print 'Tuning bandwidth and nearest neighbor index...'
 
 		# Use the Silverman rule of thumb bandwidth as the 
 		# initial guess at the bandwidth.
@@ -252,13 +252,13 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 
 		if not suppress_warning:
 			if n_neighbors_upperbound - k_opt <= 10:
-				print("####################################################\n# Warning: For p = {}, Nelder-Mead is choosing k* near k_upper = {}.\n# Increase pow_upperbound.\n####################################################""".format(p_use, n_neighbors_upperbound))
+				print "####################################################\n# Warning: For p = {}, Nelder-Mead is choosing k* near k_upper = {}.\n# Increase pow_upperbound.\n####################################################""".format(p_use, n_neighbors_upperbound)
 
 		if announce_stages:
-			print('Done tuning bandwidth and nearest neighbor index...')
+			print 'Done tuning bandwidth and nearest neighbor index...'
 
 		if announce_stages:
-			print('Scoring data (k_upper = {}):'.format(n_neighbors_upperbound))
+			print 'Scoring data (k_upper = {}):'.format(n_neighbors_upperbound)
 
 		# Compute the NLPL at the optimal values of the bandwidth and
 		# nearest neighbor number.
@@ -267,10 +267,10 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 		nlpl_insample = nlpl_insample + numpy.log(x_std)
 
 		if announce_stages:
-			print('Done scoring data (k_upper = {}):'.format(n_neighbors_upperbound))
+			print 'Done scoring data (k_upper = {}):'.format(n_neighbors_upperbound)
 
 		if output_verbose:
-			print('For p = {}, with NLPL(h* = {}, k* = {}) = {}'.format(p_use, h_opt, k_opt, nlpl_insample))
+			print 'For p = {}, with NLPL(h* = {}, k* = {}) = {}'.format(p_use, h_opt, k_opt, nlpl_insample)
 
 		nlpl_by_p.append(nlpl_insample)
 
@@ -284,7 +284,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 		n_neighbors_untuned = 5
 
 		if announce_stages:
-			print('Computing k = {} kNN estimator of entropy rate.'.format(n_neighbors_untuned))
+			print 'Computing k = {} kNN estimator of entropy rate.'.format(n_neighbors_untuned)
 
 		X = embed_ts(x, p_opt, is_multirealization = is_multirealization)
 
@@ -296,7 +296,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 		ler_knn += numpy.log(x_std)
 
 		if announce_stages:
-			print('Done computing k = {} kNN estimator of entropy rate.'.format(n_neighbors_untuned))
+			print 'Done computing k = {} kNN estimator of entropy rate.'.format(n_neighbors_untuned)
 
 	return p_opt, nlpl_opt, nlpl_by_p, er_knn, ler_knn
 
@@ -369,15 +369,15 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 
 	if p_fix == None and p_max == None:
 		p_max = q_max
-		ps = list(range(0, p_max + 1))
+		ps = range(0, p_max + 1)
 	elif p_fix != None:
 		p_max = p_fix
 		ps = [p_fix]
 	else:
-		ps = list(range(0, p_max + 1))
+		ps = range(0, p_max + 1)
 
 
-	qs = list(range(0, q_max + 1))
+	qs = range(0, q_max + 1)
 
 	# Check that pow_upperbound \in [0, 1]
 
@@ -461,7 +461,7 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 				Z_train = X_train
 
 				if announce_stages:
-					print('Computing nearest neighbor distances using k_upper = {}...'.format(n_neighbors))
+					print 'Computing nearest neighbor distances using k_upper = {}...'.format(n_neighbors)
 
 				# Compute the nearest neighbor distances and nearest neighbor indices
 				# using pyflann in the marginal (past) space.
@@ -494,7 +494,7 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 					assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
 
 				if announce_stages:
-					print('Done computing nearest neighbor distances...')
+					print 'Done computing nearest neighbor distances...'
 
 				# Compute the distances between the future points, in the same
 				# order as neighbor_inds_train, so that Dtrain_sorted is
@@ -503,7 +503,7 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 				Dtrain_sorted = numpy.zeros((n_neighbors, X_train.shape[0]), order = 'F')
 
 				if announce_stages:
-					print('Computing distances in future space...')
+					print 'Computing distances in future space...'
 
 				for ei in range(X_train.shape[0]):
 					xi = X_train[ei, -1]
@@ -513,10 +513,10 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 				Dtrain_sorted = -0.5*Dtrain_sorted
 
 				if announce_stages:
-					print('Done computing distances in future space...')
+					print 'Done computing distances in future space...'
 
 				if announce_stages:
-					print('Tuning bandwidth and nearest neighbor index...')
+					print 'Tuning bandwidth and nearest neighbor index...'
 
 				# Use the Silverman rule of thumb bandwidth as the 
 				# initial guess at the bandwidth.
@@ -551,13 +551,13 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 				k_opt = int(numpy.ceil(x_opt[1]))
 
 				if n_neighbors_upperbound - k_opt <= 10:
-					print("####################################################\n# Warning: For p = {}, Nelder-Mead is choosing k* near k_upper = {}.\n# Increase pow_upperbound.\n####################################################""".format(p_use, n_neighbors_upperbound))
+					print "####################################################\n# Warning: For p = {}, Nelder-Mead is choosing k* near k_upper = {}.\n# Increase pow_upperbound.\n####################################################""".format(p_use, n_neighbors_upperbound)
 
 				if announce_stages:
-					print('Done tuning bandwidth and nearest neighbor index...')
+					print 'Done tuning bandwidth and nearest neighbor index...'
 
 				if announce_stages:
-					print('Scoring data (k_upper = {}):'.format(n_neighbors_upperbound))
+					print 'Scoring data (k_upper = {}):'.format(n_neighbors_upperbound)
 
 				# Compute the NLPL at the optimal values of the bandwidth and
 				# nearest neighbor number.
@@ -566,10 +566,10 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 				nlpl_insample = nlpl_insample + numpy.log(x_std)
 
 				if announce_stages:
-					print('Done scoring data (k_upper = {}):'.format(n_neighbors_upperbound))
+					print 'Done scoring data (k_upper = {}):'.format(n_neighbors_upperbound)
 
 				if output_verbose:
-					print('For (q = {}, p = {}) chose k* = {} with NLPL(k*) = {}'.format(q_use, p_use, k_opt, nlpl_insample))
+					print 'For (q = {}, p = {}) chose k* = {} with NLPL(k*) = {}'.format(q_use, p_use, k_opt, nlpl_insample)
 
 				nlpl_by_qp[q_ind, p_ind] = nlpl_insample
 
@@ -656,7 +656,7 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn
 		n_neighbors_upperbound = n_neighbors
 
 		if announce_stages:
-			print('Computing nearest neighbor distances using k_upper = {}...'.format(n_neighbors))
+			print 'Computing nearest neighbor distances using k_upper = {}...'.format(n_neighbors)
 
 		# Compute the nearest neighbor distances and nearest neighbor indices
 		# in the marginal space.
@@ -682,27 +682,27 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn
 			assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
 
 		if announce_stages:
-			print('Done computing nearest neighbor distances...')
+			print 'Done computing nearest neighbor distances...'
 
 		if announce_stages:
-			print('Tuning nearest neighbor number...')
+			print 'Tuning nearest neighbor number...'
 
 		opt_out = scipy.optimize.minimize_scalar(loocv_mse, bounds = [1.0, n_neighbors_upperbound], method = 'bounded', args = (neighbor_inds, X))
 
 		if announce_stages:
-			print('Done tuning nearest neighbor number...')
+			print 'Done tuning nearest neighbor number...'
 
 		k_opt = int(numpy.floor(opt_out['x']))
 
 		kstar_by_p += [k_opt]
 
 		if output_verbose:
-			print('For p = {}, chose k* = {} with MSE(k*) = {}'.format(p_use, k_opt, opt_out['fun']))
+			print 'For p = {}, chose k* = {} with MSE(k*) = {}'.format(p_use, k_opt, opt_out['fun'])
 
 		mse_by_p += [opt_out['fun']]
 
 		if n_neighbors_upperbound - k_opt <= 10:
-			print("####################################################\n# Warning: For p = {}, Nelder-Mead is choosing k* near k_upper = {}.\n# Increase pow_upperbound.\n####################################################""".format(p_use, n_neighbors_upperbound))
+			print "####################################################\n# Warning: For p = {}, Nelder-Mead is choosing k* near k_upper = {}.\n# Increase pow_upperbound.\n####################################################""".format(p_use, n_neighbors_upperbound)
 
 	p_opt = numpy.argmin(mse_by_p)
 	mse_opt = numpy.min(mse_by_p)
@@ -777,15 +777,15 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 
 	if p_fix == None and p_max == None:
 		p_max = q_max
-		ps = list(range(0, p_max + 1))
+		ps = range(0, p_max + 1)
 	elif p_fix != None:
 		p_max = p_fix
 		ps = [p_fix]
 	else:
-		ps = list(range(0, p_max + 1))
+		ps = range(0, p_max + 1)
 
 
-	qs = list(range(0, q_max + 1))
+	qs = range(0, q_max + 1)
 
 	# Check that pow_upperbound \in [0, 1]
 
@@ -830,7 +830,7 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 				n_neighbors_upperbound = n_neighbors
 
 				if announce_stages:
-					print('Computing nearest neighbor distances using k_upper = {}...'.format(n_neighbors))
+					print 'Computing nearest neighbor distances using k_upper = {}...'.format(n_neighbors)
 
 				# Compute the nearest neighbor distances and nearest neighbor indices
 				# in the marginal space.
@@ -856,27 +856,27 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 					assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
 
 				if announce_stages:
-					print('Done computing nearest neighbor distances...')
+					print 'Done computing nearest neighbor distances...'
 
 				if announce_stages:
-					print('Tuning nearest neighbor number...')
+					print 'Tuning nearest neighbor number...'
 
 				opt_out = scipy.optimize.minimize_scalar(loocv_mse, bounds = [1.0, n_neighbors_upperbound], method = 'bounded', args = (neighbor_inds, Z))
 
 				if announce_stages:
-					print('Done tuning nearest neighbor number...')
+					print 'Done tuning nearest neighbor number...'
 
 				k_opt = int(numpy.floor(opt_out['x']))
 
 				kstar_by_qp[q_ind, p_ind] = k_opt
 
 				if output_verbose:
-					print('For (q = {}, p = {}) chose k* = {} with MSE(k*) = {}'.format(q_use, p_use, k_opt, opt_out['fun']))
+					print 'For (q = {}, p = {}) chose k* = {} with MSE(k*) = {}'.format(q_use, p_use, k_opt, opt_out['fun'])
 
 				mse_by_qp[q_ind, p_ind] = opt_out['fun']
 
 				if n_neighbors_upperbound - k_opt <= 10:
-					print("####################################################\n# Warning: For (q = {}, p = {}), Nelder-Mead is choosing k* near k_upper = {}.\n# Increase pow_upperbound.\n####################################################""".format(q_use, p_use, n_neighbors_upperbound))
+					print "####################################################\n# Warning: For (q = {}, p = {}), Nelder-Mead is choosing k* near k_upper = {}.\n# Increase pow_upperbound.\n####################################################""".format(q_use, p_use, n_neighbors_upperbound)
 
 	q_opt_ind, p_opt_ind = numpy.unravel_index(numpy.nanargmin(mse_by_qp, axis = None), mse_by_qp.shape)
 	mse_opt = numpy.min(mse_by_qp)
@@ -1052,7 +1052,7 @@ def score_data(q, D, verbose = False):
 	# nlpl = -numpy.mean((fs*log_fs)[~numpy.isinf(log_fs)]) # Weighted TER, a la Tong's paper
 
 	if verbose:
-		print(h, q[1], n_neighbors, nlpl)
+		print h, q[1], n_neighbors, nlpl
 
 	return nlpl
 
@@ -1100,7 +1100,7 @@ def score_data_marginal(q, D, verbose = False):
 	nlpl = -numpy.mean(log_fs) # Unweighted TER
 
 	if verbose:
-		print(h, nlpl)
+		print h, nlpl
 
 	return nlpl
 
@@ -1721,10 +1721,10 @@ def smooth(x,window_len=11,window='hanning'):
 	"""
 
 	if x.ndim != 1:
-		raise ValueError("smooth only accepts 1 dimension arrays.")
+		raise ValueError, "smooth only accepts 1 dimension arrays."
 
 	if x.size < window_len:
-		raise ValueError("Input vector needs to be bigger than window size.")
+		raise ValueError, "Input vector needs to be bigger than window size."
 
 
 	if window_len<3:
@@ -1732,7 +1732,7 @@ def smooth(x,window_len=11,window='hanning'):
 
 
 	if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
-		raise ValueError("Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'")
+		raise ValueError, "Window is on of 'flat', 'hanning', 'hamming', 'bartlett', 'blackman'"
 
 
 	s=numpy.r_[x[window_len-1:0:-1],x,x[-2:-window_len-1:-1]]
@@ -2037,16 +2037,16 @@ def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
 	miCalc.setProperty(miCalcClass.L_PROP_NAME, "{}".format(q))
 	miCalc.setProperty(miCalcClass.K_PROP_NAME, "{}".format(p))
 
-	delays = list(range(1, 11))
+	delays = range(1, 11)
 	TE_by_delay = numpy.zeros(len(delays))
 
 	lTEs_by_delay = {}
 
 	if verbose:
-		print('Searching for optimal delay using delay* = argmin TE(delay)...')
+		print 'Searching for optimal delay using delay* = argmin TE(delay)...'
 	for delay_ind, delay in enumerate(delays):
 		if verbose:
-			print('On delay = {}...'.format(delay))
+			print 'On delay = {}...'.format(delay)
 
 		miCalc.setProperty(miCalcClass.DELAY_PROP_NAME, "{}".format(delay))
 
@@ -2083,7 +2083,7 @@ def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
 	lTEs = lTEs_by_delay[ind]
 
 	if verbose:
-		print('Chose delay* = {}...'.format(delay))
+		print 'Chose delay* = {}...'.format(delay)
 
 	return delay, lTEs, delays, TE_by_delay
 
@@ -2248,7 +2248,7 @@ def estimate_ste(y, x, q, p, delay, lTEs, pow_neighbors = 0.5, verbose = False):
 	"""
 
 	if verbose:
-		print('Storing LTEs by trial...')
+		print 'Storing LTEs by trial...'
 
 	r = numpy.max([p, q + delay])
 
@@ -2262,7 +2262,7 @@ def estimate_ste(y, x, q, p, delay, lTEs, pow_neighbors = 0.5, verbose = False):
 		lTEs  = embed_ts(lTEs, r, is_multirealization = True)
 
 	if verbose:
-		print('Computing sTEs...')
+		print 'Computing sTEs...'
 
 	Z = stack_io(y, x, q, p, delay)
 
@@ -2277,7 +2277,7 @@ def estimate_ste(y, x, q, p, delay, lTEs, pow_neighbors = 0.5, verbose = False):
 	points_per_truncated_trial = x.shape[1] - r
 
 	if verbose:
-		print('Storing sTEs by trial...')
+		print 'Storing sTEs by trial...'
 
 	r = numpy.max([q + delay, p])
 
@@ -2350,7 +2350,7 @@ def estimate_ste_iopo(y, x, q, p_io, p_o, delay, lTEs, pow_neighbors = 0.5, verb
 	"""
 
 	if verbose:
-		print('Storing LTEs by trial...')
+		print 'Storing LTEs by trial...'
 
 	r = numpy.max([p_io, p_o, q + delay])
 
@@ -2364,7 +2364,7 @@ def estimate_ste_iopo(y, x, q, p_io, p_o, delay, lTEs, pow_neighbors = 0.5, verb
 		lTEs  = embed_ts(lTEs, r, is_multirealization = True)
 
 	if verbose:
-		print('Computing sTEs...')
+		print 'Computing sTEs...'
 
 	Z = stack_io(y, x, q, numpy.max([p_io, p_o]), delay)
 
@@ -2379,7 +2379,7 @@ def estimate_ste_iopo(y, x, q, p_io, p_o, delay, lTEs, pow_neighbors = 0.5, verb
 	points_per_truncated_trial = x.shape[1] - r
 
 	if verbose:
-		print('Storing sTEs by trial...')
+		print 'Storing sTEs by trial...'
 
 	sTEs_by_trial = stack_sid_by_trial(sTEs, r, num_trials = x.shape[0], points_per_trial = x.shape[1])
 
@@ -2526,6 +2526,6 @@ def generate_refined_aaft_surrogate(x, seed = None, print_spectra_error = False,
 			plt.plot(numpy.abs(numpy.fft.fft(xstar))[1:x.shape[0]//2])
 
 		if print_spectra_error:
-			print((numpy.mean(numpy.power(numpy.abs(numpy.fft.fft(x)) - numpy.abs(numpy.fft.fft(xstar)), 2))))
+			print(numpy.mean(numpy.power(numpy.abs(numpy.fft.fft(x)) - numpy.abs(numpy.fft.fft(xstar)), 2)))
 
 	return xstar
