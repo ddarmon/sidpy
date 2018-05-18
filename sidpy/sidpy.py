@@ -883,6 +883,17 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 
 	return qs[q_opt_ind], ps[p_opt_ind], mse_opt, mse_by_qp, kstar_by_qp
 
+def compute_nearest_neighbors_1d(X, n_neighbors, Lp_norm = 2):
+	Z = X
+
+	knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+
+	knn_out = knn.fit(Z)
+
+	distances, neighbor_inds = knn_out.kneighbors()
+
+	return distances
+
 def compute_nearest_neighbors(X, n_neighbors, Lp_norm = 2):
 	Z = X
 
@@ -1216,6 +1227,54 @@ def estimate_ter(n_neighbors, distances_marg, distances_joint, d, Lp_norm):
 
 	return ter, ler
 
+def estimate_ter_1d(n_neighbors, distances, Lp_norm):
+	"""
+	Estimate the total entropy of a time series viewed marginally
+	using the standard asymptotically unbiased estimator based
+	on k-nearest neighbors:
+
+		\hat{h}[X] = \log(n) - \psi(k) + \log V_{d, q} + \frac{d}{n} \sum_{i = 1}^{n} \log \rho_{i, k, q}
+
+	Parameters
+	----------
+	n_neighbors : int
+			The number of the nearest neighbor to compute the distance
+			to, i.e. k for a kth-nearest neighbor estimator.
+	distances : numpy.array
+			The distances to the k-nearest neighbors of each of
+			the evaluation points, in the marginal space.
+			Each row corresponds to  an evaluation point, and 
+			each column corresponds to a jth-nearest neighbor.
+			For example,
+				distances_marg[i, j]
+			is the distance between the ith evaluation point and
+			its jth-nearest neighbor.
+	Lp_norm : float
+			The value of p used to compute the L^{p} norm in 
+			computing the distance to nearest neighbors.
+			For example, p = 2 (Euclidean norm),
+			p = 1 (taxicab), p = np.infty (max-norm),
+			etc.
+
+	Returns
+	-------
+	ter : float
+			The estimated total entropy.
+	ler : numpy.array
+			The estimated local entropy.
+
+	"""
+
+	d = 1
+	n = distances.shape[0]
+	cd = numpy.power(2*gamma(1 + 1/float(Lp_norm)), d)/gamma(1 + float(d)/Lp_norm)
+
+	ler = numpy.log(n) - digamma(n_neighbors) + numpy.log(cd) + d * numpy.log(distances[:, n_neighbors-1])
+
+	ter = numpy.mean(ler)
+
+	return ter, ler
+
 def estimate_ler_insample(x, p_opt, pow_neighbors = 0.75, n_neighbors = None, is_multirealization = False):
 	"""
 	Estimate the local entropy rate using distances between kth-nearest
@@ -1272,9 +1331,14 @@ def estimate_ler_insample(x, p_opt, pow_neighbors = 0.75, n_neighbors = None, is
 	if n_neighbors is None:
 		n_neighbors = int(numpy.ceil(numpy.power(X.shape[0] - 1, pow_neighbors)))
 
-	distances_marg, distances_joint = compute_nearest_neighbors(X, n_neighbors, Lp_norm = Lp_norm)
+	if p_opt == 0:
+		distances = compute_nearest_neighbors_1d(X, n_neighbors, Lp_norm = Lp_norm)
 
-	er_knn, ler_knn = estimate_ter(n_neighbors, distances_marg, distances_joint, p_opt, Lp_norm)
+		er_knn, ler_knn = estimate_ter_1d(n_neighbors, distances, Lp_norm)
+	else:
+		distances_marg, distances_joint = compute_nearest_neighbors(X, n_neighbors, Lp_norm = Lp_norm)
+
+		er_knn, ler_knn = estimate_ter(n_neighbors, distances_marg, distances_joint, p_opt, Lp_norm)
 
 	return ler_knn
 
