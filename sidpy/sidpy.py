@@ -2553,7 +2553,7 @@ def generate_refined_aaft_surrogate(x, seed = None, print_spectra_error = False,
 		# Recover the surrogate time series from its
 		# Fourier transform.
 
-		xstar = numpy.abs(numpy.fft.ifft(Xstarfft))
+		xstar = numpy.real(numpy.fft.ifft(Xstarfft))
 
 		if to_plot and (num_iterations - n) <= 1:
 			plt.figure()
