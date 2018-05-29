@@ -82,9 +82,18 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 	# Normalize the data to have sample mean 0 and
 	# sample standard deviation 1.
 
-	x_std = x.std()
+	if isinstance(x, list):
+		x_stacked = numpy.hstack(x)
 
-	x = (x - x.mean())/x_std
+		x = numpy.array(x)
+
+		x_std = x_stacked.std()
+
+		x = (x - x_stacked.mean())/x_std
+	else:
+		x_std = x.std()
+
+		x = (x - x.mean())/x_std
 
 	Lp_norm = 2.
 
@@ -645,8 +654,14 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn
 	mse_by_p = []
 	kstar_by_p = []
 
-	mse_by_p = [numpy.mean(numpy.power(x - numpy.mean(x), 2))]
-	kstar_by_p = [len(x)]
+	if isinstance(x, list):
+		x_stacked = numpy.hstack(x)
+
+		mse_by_p = [numpy.mean(numpy.power(x_stacked - numpy.mean(x_stacked), 2))]
+		kstar_by_p = [x_stacked.shape[0]]
+	else:
+		mse_by_p = [numpy.mean(numpy.power(x - numpy.mean(x), 2))]
+		kstar_by_p = [len(x)]
 
 	for p_use in range(1, p_max+1):
 		X = X_full[:, (p_max - p_use):]
@@ -956,16 +971,35 @@ def embed_ts(x, p_max, is_multirealization = False):
 	"""
 
 	if is_multirealization:
-		n_trials = x.shape[0]
-		n = x.shape[1]
-		n_per_trial = n - p_max
+		if isinstance(x, numpy.ndarray): # Check if the realizations are stored in a numpy.array
+			n_trials = x.shape[0]
+			n = x.shape[1]
+			n_per_trial = n - p_max
 
-		X = numpy.empty((n_per_trial*n_trials, p_max+1))
+			X = numpy.empty((n_per_trial*n_trials, p_max+1))
 
-		for trial_ind in range(n_trials):
-			x_cur = x[trial_ind, :]
-			for p in range(p_max+1):
-				X[trial_ind*n_per_trial:(trial_ind + 1)*n_per_trial, p] = x_cur[p:n-(p_max - p)]
+			for trial_ind in range(n_trials):
+				x_cur = x[trial_ind, :]
+				for p in range(p_max+1):
+					X[trial_ind*n_per_trial:(trial_ind + 1)*n_per_trial, p] = x_cur[p:n-(p_max - p)]
+		else: # If not, they should be stored in either a list or tuple of arrays.
+			n_trials = len(x)
+
+			n_by_trial = numpy.array([trial.shape[0] for trial in x])
+
+			n_per_trial = n_by_trial - p_max
+
+			X = numpy.empty((numpy.sum(n_per_trial), p_max + 1))
+
+			for trial_ind in range(n_trials):
+				x_cur = x[trial_ind]
+
+				for p in range(p_max+1):
+					X[numpy.sum(n_per_trial[:trial_ind]):numpy.sum(n_per_trial[:trial_ind+1]), p] = x_cur[p:n_by_trial[trial_ind]-(p_max - p)]
+
+
+
+
 	else:
 		X = numpy.empty((len(x) - p_max, p_max+1))
 		n = len(x)
@@ -1405,7 +1439,7 @@ def estimate_lce_insample(X, pow_neighbors = 0.75, n_neighbors = None):
 
 	return ler_knn
 
-def estimate_ser_insample(x, ler, p_opt, q = 0, pow_neighbors = 0.75):
+def estimate_ser_insample(x, ler, p_opt, q = 0, pow_neighbors = 0.75, is_multirealization = False):
 	"""
 	Estimate the specific entropy rate in-sample by smoothing
 	the local entropy rate estimates against the delay vectors
@@ -1457,12 +1491,12 @@ def estimate_ser_insample(x, ler, p_opt, q = 0, pow_neighbors = 0.75):
 
 	"""
 
-	assert len(ler) == len(x) - (p_opt + q), "Error: Use estimated local entropy rate (ler) with the same model order p_opt and predictive horizon q."
-
 	if q == 0:
-		X   = embed_ts(x, p_opt)
+		X   = embed_ts(x, p_opt, is_multirealization)
 	else:
-		X   = embed_ts_multihorizon(x, p_opt, q)
+		X   = embed_ts_multihorizon(x, p_opt, q, is_multirealization)
+
+	assert len(ler) == X.shape[0], "Error: Use estimated local entropy rate (ler) with the same model order p_opt and predictive horizon q."
 
 	n_neighbors = int(numpy.ceil(numpy.power(X.shape[0] - 1, pow_neighbors)))
 
@@ -2215,7 +2249,7 @@ def stack_io(y, x, q, p, delay):
 
 	return Z
 
-def stack_sid_by_trial(sid, r, num_trials, points_per_trial):
+def stack_sid_by_trial(sid, r, num_trials, points_per_trial, is_regular = True):
 	"""
 	stack_sid_by_trial stacks the specific information dynamic measure
 	in a trial-by-trial / realization-by-realization numpy array. This
@@ -2230,7 +2264,20 @@ def stack_sid_by_trial(sid, r, num_trials, points_per_trial):
 	r : int
 			The maximum lag to use, typically 
 			max {p_io, p_o, q + delay},
-			
+	num_trials : int
+			The number of trials / realizations used to estimate the
+			information dynamical quantity.
+	points_per_trial : int or numpy.array
+			The number of points per trial for which the quantity is
+			estimated.
+
+			If is_regular = True, points_per_trial is an int
+			giving the value for all trials.
+
+			If is_regular = False, points_per_trial is a numpy.array
+			giving the value for each trial.
+	is_regular : boolean
+			Whether each trial is the same length (True) or not (False).	
 
 	Returns
 	-------
@@ -2250,14 +2297,27 @@ def stack_sid_by_trial(sid, r, num_trials, points_per_trial):
 
 	"""
 
-	points_per_truncated_trial = points_per_trial - r
+	if is_regular:
+		points_per_truncated_trial = points_per_trial - r
 
-	sid_by_trial = numpy.empty((num_trials, points_per_truncated_trial + r))
+		sid_by_trial = numpy.empty((num_trials, points_per_truncated_trial + r))
 
-	sid_by_trial.fill(numpy.nan)
+		sid_by_trial.fill(numpy.nan)
 
-	for trial_ind in range(num_trials):
-		sid_by_trial[trial_ind, r:] = sid[trial_ind*points_per_truncated_trial:(trial_ind + 1)*points_per_truncated_trial]
+		for trial_ind in range(num_trials):
+			sid_by_trial[trial_ind, r:] = sid[trial_ind*points_per_truncated_trial:(trial_ind + 1)*points_per_truncated_trial]
+	else:
+		points_per_truncated_trial = numpy.array(points_per_trial) - r
+
+		sid_by_trial = []
+
+		for trial_ind in range(num_trials):
+			cur_trial = numpy.empty(points_per_trial[trial_ind])
+			cur_trial.fill(numpy.nan)
+
+			cur_trial[r:] = sid[numpy.sum(points_per_truncated_trial[:trial_ind]):numpy.sum(points_per_truncated_trial[:trial_ind+1])]
+
+			sid_by_trial.append(cur_trial)
 
 	return sid_by_trial
 
