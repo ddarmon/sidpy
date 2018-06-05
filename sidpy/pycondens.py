@@ -144,7 +144,7 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, output_verbose = False):
 	h = [h_opt]
 
 	if not os.path.exists('bw-saved'):
-	    os.makedirs('bw-saved')
+		os.makedirs('bw-saved')
 
 	save_bandwidth_o(p_max, h[0], numpy.array([0]), sd_x, 'bw-saved/' + save_name + '-' + str(0))
 
@@ -209,6 +209,109 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, output_verbose = False):
 	p_opt = numpy.argmin(nlls)
 
 	return p_opt, nlls, h_raw, active_set_return
+
+def score_model_orders_with_saved_bws(x, p_max, save_name):
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Set various parameters.
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	lwo_halfwidth = 10
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Rescale data.
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+	n = len(x)
+
+	# Compute the L1 distances between each
+	# timepoint in x, 
+	# 
+	# Hence, D is a symmetric n x n matrix.
+
+	D = pairwise_distances(x[:,numpy.newaxis], metric = 'l1')
+
+	max_marginal_dist = D.max()
+
+	# Compute the squared distances and multiply by the
+	# -1/2 prefactor. NOTE: For now, we assume a Gaussian
+	# kernel for the predictive density.
+
+	# Thus, up to the bandwidth (squared) prefactor,
+	# these are the terms we sum and exponentiate
+	# to get the kernel of interest.
+
+	D = -0.5*D*D
+
+	# Let p be the autoregressive order, so we embed into
+	# (p+1)-space.
+
+	# p_max is the largest p we will consider.
+
+	ps = range(1, p_max + 1)
+
+	# Stack the submatrices of D so that we can 
+	# easily compute the distances in the *embedding* space.
+	# Do this all at once up to the maximum model order that
+	# will be considered.
+
+	De_max = numpy.empty(shape = (n-p_max, n-p_max, p_max + 1), dtype = 'float32', order = 'C')
+
+	submatrix_index = numpy.arange(0, n-p_max)
+
+	for offset_ind in range(0, p_max+1):
+		De_max[:, :, offset_ind] = D[submatrix_index + offset_ind, :][:, submatrix_index + offset_ind]
+
+	# Note that De_max is (n-p_max)x(n-p_max)x(p_max+1), with the *future* values stored in
+	# 	De_max[:, :, p_max]
+	# and the most distant past stored in 
+	# 	De_max[:, :, 0]
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Compute the marginal (i.e. lag-0) negative log-
+	# predictive likelihood.
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	h, active_set = load_bandwidth_o('bw-saved/' + save_name + '-' + str(0), p_max)
+
+	De = De_max[:, :, p_max][:, :, numpy.newaxis]
+
+	nlls = [score_data_lwo_weave(numpy.sqrt(h), De, lwo_halfwidth)]
+
+	hs  = {}
+
+	hs[0] = h
+
+	active_sets = {}
+
+	active_sets[0] = active_set
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Compute the higher order (lag-p) negative log-
+	# predictive likelihoods.
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	for p in ps:
+		h, active_set = load_bandwidth_o('bw-saved/' + save_name + '-' + str(p), p)
+		
+		De = De_max[:, :, p_max - p:][:, :, active_set] # Pull out the active set from De_max
+
+		nlls.append(score_data_lwo_weave(numpy.sqrt(h), De, lwo_halfwidth))
+
+		hs[p] = h
+		active_sets[p] = active_set
+
+	p_opt = numpy.argmin(nlls)
+
+	return p_opt, nlls, hs, active_sets
 
 def estimate_ser_kde(x, p_opt, h, active_set):
 	lwo_halfwidth = 10
@@ -326,7 +429,7 @@ def score_data_lwo(h_sr, De, lwo_halfwidth = 0, print_iterates = False):
 	S_top = S_bottom + De_scaled[:,:,p_internal]
 
 	summands_bottom = numpy.exp(S_bottom)
-	summands_top    = numpy.exp(S_top)
+	summands_top	= numpy.exp(S_top)
 
 	N = De_scaled.shape[0]
 
@@ -376,7 +479,7 @@ def score_data_lwo_bm(h_sr, De, lwo_halfwidth = 0, print_iterates = False):
 	S_top = S_bottom + De_scaled[:,:,p_internal]
 
 	summands_bottom = numpy.exp(S_bottom)
-	summands_top    = numpy.exp(S_top)
+	summands_top	= numpy.exp(S_top)
 
 	N = De_scaled.shape[0]
 
@@ -424,7 +527,7 @@ def score_data_lwo_weave(h_sr, De, lwo_halfwidth = 0, print_iterates = False):
 	S_top = S_bottom + De_scaled[:,:,p_internal]
 
 	summands_bottom = numpy.exp(S_bottom)
-	summands_top    = numpy.exp(S_top)
+	summands_top	= numpy.exp(S_top)
 
 	N = De_scaled.shape[0]
 
@@ -497,7 +600,7 @@ def score_data_lwo_weave(h_sr, De, lwo_halfwidth = 0, print_iterates = False):
 	"""
 
 	weave.inline(code,['summands_top', 'summands_bottom', 'N', 'lwo_halfwidth', 'fs'],
-               type_converters=weave.converters.blitz)
+			   type_converters=weave.converters.blitz)
 
 
 	score = -numpy.log(fs/h[p_internal]/numpy.sqrt(2*numpy.pi)).mean()
@@ -531,7 +634,7 @@ def nll_data_lwo_weave(h_sr, De, lwo_halfwidth = 0):
 	S_top = S_bottom + De_scaled[:,:,p_internal]
 
 	summands_bottom = numpy.exp(S_bottom)
-	summands_top    = numpy.exp(S_top)
+	summands_top	= numpy.exp(S_top)
 
 	N = De_scaled.shape[0]
 
@@ -604,7 +707,7 @@ def nll_data_lwo_weave(h_sr, De, lwo_halfwidth = 0):
 	"""
 
 	weave.inline(code,['summands_top', 'summands_bottom', 'N', 'lwo_halfwidth', 'fs'],
-               type_converters=weave.converters.blitz)
+			   type_converters=weave.converters.blitz)
 
 
 	nlls = -numpy.log(fs/h[p_internal]/numpy.sqrt(2*numpy.pi))
@@ -635,7 +738,7 @@ def nll_data_lwo_bm(h_sr, De, lwo_halfwidth = 0):
 	S_top = S_bottom + De_scaled[:,:,p_internal]
 
 	summands_bottom = numpy.exp(S_bottom)
-	summands_top    = numpy.exp(S_top)
+	summands_top	= numpy.exp(S_top)
 
 	N = De_scaled.shape[0]
 
@@ -680,7 +783,7 @@ def score_data_weave(h_sr, De, print_iterates = False):
 	S_top = S_bottom + De_scaled[:,:,p_internal]
 
 	summands_bottom = numpy.exp(S_bottom)
-	summands_top    = numpy.exp(S_top)
+	summands_top	= numpy.exp(S_top)
 
 	N_eval = De_scaled.shape[0]
 	N_train  = De_scaled.shape[1]
@@ -717,7 +820,7 @@ def score_data_weave(h_sr, De, print_iterates = False):
 	"""
 
 	weave.inline(code,['summands_top', 'summands_bottom', 'N_train', 'N_eval', 'fs'],
-               type_converters=weave.converters.blitz)
+			   type_converters=weave.converters.blitz)
 
 
 	score = -numpy.log(fs/h[p_internal]/numpy.sqrt(2*numpy.pi)).mean()
@@ -750,7 +853,7 @@ def score_data_lwo_rawh_weave(h, De, lwo_halfwidth = 0):
 	S_top = S_bottom + De_scaled[:,:,p_internal]
 
 	summands_bottom = numpy.exp(S_bottom)
-	summands_top    = numpy.exp(S_top)
+	summands_top	= numpy.exp(S_top)
 
 	N = De_scaled.shape[0]
 
@@ -823,7 +926,7 @@ def score_data_lwo_rawh_weave(h, De, lwo_halfwidth = 0):
 	"""
 
 	weave.inline(code,['summands_top', 'summands_bottom', 'N', 'lwo_halfwidth', 'fs'],
-               type_converters=weave.converters.blitz)
+			   type_converters=weave.converters.blitz)
 
 
 	score = -numpy.log(fs/h[p_internal]/numpy.sqrt(2*numpy.pi)).mean()
@@ -856,7 +959,7 @@ def score_data_lai(h_sr, De, lwo_halfwidth = 0):
 	S_top = S_bottom + De_scaled[:,:,p_internal]
 
 	summands_bottom = numpy.exp(S_bottom)
-	summands_top    = numpy.exp(S_top)
+	summands_top	= numpy.exp(S_top)
 
 	N = De_scaled.shape[0]
 
