@@ -12,6 +12,123 @@ from itertools import islice
 
 import os
 
+def stack_distance_matrix(x, p_max, mean_x = 0., sd_x = 1.0, is_multirealization = False, output_verbose = False):
+	if is_multirealization:
+		ns = []
+
+		for r in range(len(x)):
+			ns.append(x[r].shape[0])
+
+		block_limits = [0] + numpy.cumsum(ns).tolist()
+
+		x_flat = numpy.concatenate(x)
+
+		x_flat = (x_flat - mean_x)/(sd_x)
+
+		D = pairwise_distances(x_flat[:,numpy.newaxis], metric = 'l1')
+
+		max_marginal_dist = D.max()
+
+		# Compute the squared distances and multiply by the
+		# -1/2 prefactor. NOTE: For now, we assume a Gaussian
+		# kernel for the predictive density.
+
+		# Thus, up to the bandwidth (squared) prefactor,
+		# these are the terms we sum and exponentiate
+		# to get the kernel of interest.
+
+		D = -0.5*D*D
+
+		# Stack the submatrices of D so that we can 
+		# easily compute the distances in the *embedding* space.
+		# Do this all at once up to the maximum model order that
+		# will be considered.
+
+		total_size = numpy.sum(ns)-len(ns)*p_max
+
+		De_max = numpy.empty(shape = (total_size, total_size, p_max + 1), dtype = 'float32', order = 'C')
+
+		for block_j in range(len(ns)):
+			submatrix_index_j = numpy.arange(block_limits[block_j], block_limits[block_j+1]-p_max)
+			sub_for_De_j = submatrix_index_j - block_j*p_max
+			for block_i in range(len(ns)):
+				submatrix_index_i = numpy.arange(block_limits[block_i], block_limits[block_i+1]-p_max)
+				sub_for_De_i = submatrix_index_i - block_i*p_max
+				for offset_ind in range(0, p_max+1):
+					De_max[numpy.ix_(sub_for_De_i, sub_for_De_j, [offset_ind])] = D[numpy.ix_(submatrix_index_i + offset_ind, submatrix_index_j + offset_ind)][:, :, numpy.newaxis]
+
+
+	else:
+		n = len(x)
+
+		print('Remember to uncomment the normalization and to incorporate this into the way you use this code.')
+
+		x = (x-mean_x)/sd_x
+
+		#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+		#
+		# Compute reasonable cutoffs for turning off a lag
+		# based on the kernels all being approximately 
+		# constant for that bandwidth.
+		# 
+		# See notes from 151216-b.
+		# 
+		#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+		eps = 0.1
+		rsx = numpy.power(numpy.max(x) - numpy.min(x), 2)
+
+		hx_cutoff = scipy.optimize.brentq(func_h_cutoff, a = 0.1, b = 100, args = (rsx, eps))
+
+		if output_verbose:
+			print 'Using bandwidth cutoffs hx = {}'.format(hx_cutoff)
+
+		# Compute the L1 distances between each
+		# timepoint in x, 
+		# 
+		# Hence, D is a symmetric n x n matrix.
+
+		D = pairwise_distances(x[:,numpy.newaxis], metric = 'l1')
+
+		max_marginal_dist = D.max()
+
+		# Compute the squared distances and multiply by the
+		# -1/2 prefactor. NOTE: For now, we assume a Gaussian
+		# kernel for the predictive density.
+
+		# Thus, up to the bandwidth (squared) prefactor,
+		# these are the terms we sum and exponentiate
+		# to get the kernel of interest.
+
+		D = -0.5*D*D
+
+		# Let p be the autoregressive order, so we embed into
+		# (p+1)-space.
+
+		# p_max is the largest p we will consider.
+
+		ps = range(1, p_max + 1)
+
+		# Stack the submatrices of D so that we can 
+		# easily compute the distances in the *embedding* space.
+		# Do this all at once up to the maximum model order that
+		# will be considered.
+
+		De_max = numpy.empty(shape = (n-p_max, n-p_max, p_max + 1), dtype = 'float32', order = 'C')
+
+		submatrix_index = numpy.arange(0, n-p_max)
+
+		for offset_ind in range(0, p_max+1):
+			De_max[:, :, offset_ind] = D[submatrix_index + offset_ind, :][:, submatrix_index + offset_ind]
+
+		# Note that De_max is (n-p_max)x(n-p_max)x(p_max+1), with the *future* values stored in
+		# 	De_max[:, :, p_max]
+		# and the most distant past stored in 
+		# 	De_max[:, :, 0]
+
+	return De_max
+
+
 def choose_model_order_nlpl_kde(x, p_max, save_name, output_verbose = False):
 	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	#
@@ -105,7 +222,7 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, output_verbose = False):
 
 	De = De_max[:, :, p_max][:, :, numpy.newaxis]
 
-	h = numpy.array(numpy.power(n, -1./(5)))
+	h = numpy.array(numpy.power(De_max.shape[0], -1./(5)))
 
 	# opt_method = 'powell'
 	# opt_method = 'COBYLA'
@@ -174,7 +291,7 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, output_verbose = False):
 		# initially set the bandwidth to the asymptotically optimal
 		# value, which for p covariates is n^(-1/(p+5))
 		
-		h = [numpy.power(n, -1./(p + 5))] + h
+		h = [numpy.power(De_max.shape[0], -1./(p + 5))] + h
 
 		optim_out = scipy.optimize.minimize(score_data_lwo_weave, numpy.sqrt(h), args = (De, lwo_halfwidth), method=opt_method, options = options_use)
 		h_opt = optim_out['x']*optim_out['x']
