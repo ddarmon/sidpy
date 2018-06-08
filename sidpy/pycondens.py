@@ -8,6 +8,8 @@ from scipy.stats import norm
 
 import weave
 
+import sidpy
+
 from itertools import islice
 
 import os
@@ -27,8 +29,6 @@ def stack_distance_matrix(x, p_max, mean_x = 0., sd_x = 1.0, is_multirealization
 
 		D = pairwise_distances(x_flat[:,numpy.newaxis], metric = 'l1')
 
-		max_marginal_dist = D.max()
-
 		# Compute the squared distances and multiply by the
 		# -1/2 prefactor. NOTE: For now, we assume a Gaussian
 		# kernel for the predictive density.
@@ -46,7 +46,8 @@ def stack_distance_matrix(x, p_max, mean_x = 0., sd_x = 1.0, is_multirealization
 
 		total_size = numpy.sum(ns)-len(ns)*p_max
 
-		De_max = numpy.empty(shape = (total_size, total_size, p_max + 1), dtype = 'float32', order = 'C')
+		# De_max = numpy.empty(shape = (total_size, total_size, p_max + 1), dtype = 'float32', order = 'C')
+		De_max = numpy.zeros(shape = (total_size, total_size, p_max + 1), dtype = 'float32', order = 'C')
 
 		for block_j in range(len(ns)):
 			submatrix_index_j = numpy.arange(block_limits[block_j], block_limits[block_j+1]-p_max)
@@ -60,8 +61,6 @@ def stack_distance_matrix(x, p_max, mean_x = 0., sd_x = 1.0, is_multirealization
 
 	else:
 		n = len(x)
-
-		print('Remember to uncomment the normalization and to incorporate this into the way you use this code.')
 
 		x = (x-mean_x)/sd_x
 
@@ -89,8 +88,6 @@ def stack_distance_matrix(x, p_max, mean_x = 0., sd_x = 1.0, is_multirealization
 		# Hence, D is a symmetric n x n matrix.
 
 		D = pairwise_distances(x[:,numpy.newaxis], metric = 'l1')
-
-		max_marginal_dist = D.max()
 
 		# Compute the squared distances and multiply by the
 		# -1/2 prefactor. NOTE: For now, we assume a Gaussian
@@ -129,7 +126,7 @@ def stack_distance_matrix(x, p_max, mean_x = 0., sd_x = 1.0, is_multirealization
 	return De_max
 
 
-def choose_model_order_nlpl_kde(x, p_max, save_name, output_verbose = False):
+def choose_model_order_nlpl_kde(x, p_max, save_name, is_multirealization = False, output_verbose = False):
 	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	#
 	# Set various parameters.
@@ -140,18 +137,19 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, output_verbose = False):
 
 	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	#
-	# Rescale data.
+	# Get constants for rescaling the data to have 
+	# sample mean 0 and sample standard deviation 1.
 	#
 	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+	if is_multirealization:
+		x_stacked = numpy.concatenate(x)
 
-	n = len(x)
-
-	x_original = x.copy()
-
-	sd_x = x_original.std()
-
-	x = (x-x.mean())/sd_x
+		mean_x = x_stacked.mean()
+		sd_x   = x_stacked.std()
+	else:
+		mean_x = x.mean()
+		sd_x   = x.std()
 
 	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	#
@@ -163,51 +161,19 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, output_verbose = False):
 	# 
 	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-	eps = 0.1
-	rsx = numpy.power(numpy.max(x) - numpy.min(x), 2)
+	if is_multirealization:
+		eps = 0.1
+		rsx = numpy.power(numpy.max(x_stacked) - numpy.min(x_stacked), 2)
+	else:
+		eps = 0.1
+		rsx = numpy.power(numpy.max(x) - numpy.min(x), 2)
 
 	hx_cutoff = scipy.optimize.brentq(func_h_cutoff, a = 0.1, b = 100, args = (rsx, eps))
 
 	if output_verbose:
 		print 'Using bandwidth cutoffs hx = {}'.format(hx_cutoff)
 
-	# Compute the L1 distances between each
-	# timepoint in x, 
-	# 
-	# Hence, D is a symmetric n x n matrix.
-
-	D = pairwise_distances(x[:,numpy.newaxis], metric = 'l1')
-
-	max_marginal_dist = D.max()
-
-	# Compute the squared distances and multiply by the
-	# -1/2 prefactor. NOTE: For now, we assume a Gaussian
-	# kernel for the predictive density.
-
-	# Thus, up to the bandwidth (squared) prefactor,
-	# these are the terms we sum and exponentiate
-	# to get the kernel of interest.
-
-	D = -0.5*D*D
-
-	# Let p be the autoregressive order, so we embed into
-	# (p+1)-space.
-
-	# p_max is the largest p we will consider.
-
-	ps = range(1, p_max + 1)
-
-	# Stack the submatrices of D so that we can 
-	# easily compute the distances in the *embedding* space.
-	# Do this all at once up to the maximum model order that
-	# will be considered.
-
-	De_max = numpy.empty(shape = (n-p_max, n-p_max, p_max + 1), dtype = 'float32', order = 'C')
-
-	submatrix_index = numpy.arange(0, n-p_max)
-
-	for offset_ind in range(0, p_max+1):
-		De_max[:, :, offset_ind] = D[submatrix_index + offset_ind, :][:, submatrix_index + offset_ind]
+	De_max = stack_distance_matrix(x, p_max, mean_x = mean_x, sd_x = sd_x, is_multirealization = is_multirealization, output_verbose = output_verbose)
 
 	# Note that De_max is (n-p_max)x(n-p_max)x(p_max+1), with the *future* values stored in
 	# 	De_max[:, :, p_max]
@@ -278,6 +244,8 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, output_verbose = False):
 
 	active_sets[0] = active_set
 
+	ps = range(1, p_max + 1)
+
 	for p in ps:
 		if output_verbose:
 			print("On p = {}...".format(p))
@@ -327,7 +295,7 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, output_verbose = False):
 
 	return p_opt, nlls, h_raw, active_set_return
 
-def score_model_orders_with_saved_bws(x, p_max, save_name):
+def score_model_orders_with_saved_bws(x, p_max, save_name, is_multirealization = False):
 	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	#
 	# Set various parameters.
@@ -336,52 +304,7 @@ def score_model_orders_with_saved_bws(x, p_max, save_name):
 
 	lwo_halfwidth = 10
 
-	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-	#
-	# Rescale data.
-	#
-	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
-	n = len(x)
-
-	# Compute the L1 distances between each
-	# timepoint in x, 
-	# 
-	# Hence, D is a symmetric n x n matrix.
-
-	D = pairwise_distances(x[:,numpy.newaxis], metric = 'l1')
-
-	max_marginal_dist = D.max()
-
-	# Compute the squared distances and multiply by the
-	# -1/2 prefactor. NOTE: For now, we assume a Gaussian
-	# kernel for the predictive density.
-
-	# Thus, up to the bandwidth (squared) prefactor,
-	# these are the terms we sum and exponentiate
-	# to get the kernel of interest.
-
-	D = -0.5*D*D
-
-	# Let p be the autoregressive order, so we embed into
-	# (p+1)-space.
-
-	# p_max is the largest p we will consider.
-
-	ps = range(1, p_max + 1)
-
-	# Stack the submatrices of D so that we can 
-	# easily compute the distances in the *embedding* space.
-	# Do this all at once up to the maximum model order that
-	# will be considered.
-
-	De_max = numpy.empty(shape = (n-p_max, n-p_max, p_max + 1), dtype = 'float32', order = 'C')
-
-	submatrix_index = numpy.arange(0, n-p_max)
-
-	for offset_ind in range(0, p_max+1):
-		De_max[:, :, offset_ind] = D[submatrix_index + offset_ind, :][:, submatrix_index + offset_ind]
+	De_max = stack_distance_matrix(x, p_max, mean_x = 0.0, sd_x = 1.0, is_multirealization = is_multirealization)
 
 	# Note that De_max is (n-p_max)x(n-p_max)x(p_max+1), with the *future* values stored in
 	# 	De_max[:, :, p_max]
@@ -416,6 +339,8 @@ def score_model_orders_with_saved_bws(x, p_max, save_name):
 	#
 	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+	ps = range(1, p_max + 1)
+
 	for p in ps:
 		h, active_set = load_bandwidth_o('bw-saved/' + save_name + '-' + str(p), p)
 		
@@ -430,41 +355,12 @@ def score_model_orders_with_saved_bws(x, p_max, save_name):
 
 	return p_opt, nlls, hs, active_sets
 
-def estimate_ser_kde(x, p_opt, h, active_set):
+def estimate_ser_kde(x, p_opt, h, active_set, is_multirealization = False):
 	lwo_halfwidth = 10
 
-	n = len(x)
+	De_max = stack_distance_matrix(x, p_opt, mean_x = 0.0, sd_x = 1.0, is_multirealization = is_multirealization)
 
-	# Check that x and y are the same length.
-
-	Dx = pairwise_distances(x[:,numpy.newaxis], metric = 'l1')
-
-	# Compute the squared distances and multiply by the
-	# -1/2 prefactor. NOTE: For now, we assume a Gaussian
-	# kernel for the predictive density.
-
-	# Thus, up to the bandwidth (squared) prefactor,
-	# these are the terms we sum and exponentiate
-	# to get the kernel of interest.
-
-	Dx = -0.5*Dx*Dx
-
-	# Let p be the autoregressive order, so we embed into
-	# (p+1)-space.
-
-	# Stack the submatrices of Dy and Dx so that we can 
-	# easily compute the distances in the *embedding* space.
-
-	De_max = numpy.empty(shape = (n-p_opt, n-p_opt, p_opt + 1), dtype = 'float32', order = 'C')
-
-	submatrix_index = numpy.arange(0, n-p_opt)
-
-	for offset_ind in range(0, p_opt):
-		De_max[:, :, offset_ind] = Dx[submatrix_index + offset_ind, :][:, submatrix_index + offset_ind]
-
-	De_max[:, :, p_opt] = Dx[submatrix_index + p_opt, :][:, submatrix_index + p_opt]
-
-	De = numpy.empty(shape = (n-p_opt, n-p_opt, len(active_set)), dtype = 'float32', order = 'C')
+	De = numpy.empty(shape = (De_max.shape[0], De_max.shape[1], len(active_set)), dtype = 'float32', order = 'C')
 
 	for lag_ind, lag_val in enumerate(active_set):
 		De[:, :, lag_ind] = De_max[:, :, lag_val]
@@ -494,13 +390,21 @@ def estimate_ser_kde(x, p_opt, h, active_set):
 
 	S_bottom = De_scaled[:,:,:(len(h)-1)].sum(2)
 
-	X_futures = x[p_opt:]
+	X = sidpy.embed_ts(x, p_max = p_opt, is_multirealization = is_multirealization)
+
+	X_futures = X[:, -1]
 
 	summands_bottom = numpy.exp(S_bottom)
 
 	spenra = numpy.zeros(De.shape[0])
 
-	x_sorted = numpy.sort(x)
+	if is_multirealization:
+		x_stacked = numpy.concatenate(x)
+		sd_x = x_stacked.std()
+		x_sorted = numpy.sort(x_stacked)
+	else:
+		sd_x = x.std()
+		x_sorted = numpy.sort(X_futures)
 
 	N = De_scaled.shape[0]
 
@@ -516,7 +420,7 @@ def estimate_ser_kde(x, p_opt, h, active_set):
 		S_bottom_cur = S_bottom[t,:]
 		summands_bottom_cur = summands_bottom[t, :]
 
-		quad_flogf_out = quad(integrand_flogf_er, x_sorted[0]-5*x.std(), x_sorted[-1]+5*x.std(), epsabs=0.01, args = (X_futures, S_bottom_cur, summands_bottom_cur, h, h_squared, mask))
+		quad_flogf_out = quad(integrand_flogf_er, x_sorted[0]-5*sd_x, x_sorted[-1]+5*sd_x, epsabs=0.01, args = (X_futures, S_bottom_cur, summands_bottom_cur, h, h_squared, mask))
 
 		spenra[t] = quad_flogf_out[0]
 

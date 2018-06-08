@@ -6,8 +6,6 @@ import sys
 
 sys.path.append('/Users/{}/Documents/Reference/G/github/sidpy/sidpy'.format(username))
 
-import glob
-
 import sidpy
 
 import numpy

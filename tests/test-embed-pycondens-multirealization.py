@@ -1,4 +1,13 @@
 import numpy
+
+import getpass
+
+username = getpass.getuser()
+
+import sys
+
+sys.path.append('/Users/{}/Documents/Reference/G/github/sidpy/sidpy'.format(username))
+
 import pycondens
 import sidpy
 
