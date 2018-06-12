@@ -2653,3 +2653,111 @@ def generate_refined_aaft_surrogate(x, seed = None, print_spectra_error = False,
 			print((numpy.mean(numpy.power(numpy.abs(numpy.fft.fft(x)) - numpy.abs(numpy.fft.fft(xstar)), 2))))
 
 	return xstar
+
+def embed_ts_multilag(x, dt, Tp, tf, is_multirealization = False):
+	"""
+	Embed a time series into a data matrix X appropriate
+	for an analysis of a sampled continuous-time system
+	where one desires to determine the optimal sampling
+	for prediction at a given future horizon.
+
+	The goal is to predict the future at a time t + tf,
+	given the past values in [t - Tp, t], where the 
+	signal is sampled using a sampling rate of dt.
+
+	embed_ts_multilag generates a data matrix that
+	is appropriate to use with extract_multilag_from_embed,
+	so that data lengths, past-future pairs, etc., are 
+	comparable using different values of a lower sampling
+	rate Dt = m*dt.
+
+	Parameters
+	----------
+	x : numpy.array
+			The time series to embed in a multi-lag
+			data matrix.
+	dt : float
+			The sampling rate for the signal.
+	Tp : float
+			The total length of the interval into the
+			past to consider when predicting the future.
+	tf : float
+			The amount of time into the future, relative
+			to the present, to predict.
+
+	Returns
+	-------
+	X : numpy.array
+			The data matrix, for use with
+			extract_multilag_from_embed.
+
+	"""
+
+	Mp = int(Tp/float(dt))
+
+	n = int(tf/float(dt))
+
+	p_max = Mp + n
+
+	X = embed_ts(x, p_max, is_multirealization = is_multirealization)
+
+	return X
+
+
+def extract_multilag_from_embed(X, dt, Tp, tf, dm):
+	"""
+	Extract the appropriate elements from a data matrix
+	created by using embed_ts_multilag with these same
+	parameters.
+
+
+	Parameters
+	----------
+	X : numpy.array
+			The data matrix created using embed_ts_multilag
+			with the same dt, Tp, and tf.
+	dt : float
+			The sampling rate for the signal.
+	Tp : float
+			The total length of the interval into the
+			past to consider when predicting the future.
+	tf : float
+			The amount of time into the future, relative
+			to the present, to predict.
+	dm : int
+			The lower sampling rate given by Dt = m*dt.
+
+	Returns
+	-------
+	Xpf : numpy.array
+			The numpy downsampled X matrix, keeping the
+			present at t, the future at t + tf, and 
+			extracting the relevant elements of the past
+			at the new sampling rate Dt = m*dt.
+			
+	"""
+
+	Mp = int(Tp/float(dt))
+
+	n = int(tf/float(dt))
+
+	dtp = dm*dt
+
+	Xf = X[:, -1]
+
+	Xpresent = X[:, -(n+1)]
+
+	m = int(numpy.floor(Tp/dtp))
+
+	inds = numpy.arange(Mp, Mp-(m+1)*dm,-dm)[::-1]
+	Xpast = X[:, inds]
+
+	# print("\n")
+
+	# print(numpy.column_stack((Xpresent, Xf)))
+
+	# print(numpy.column_stack((Xpast, Xf)))
+
+	Xpf = numpy.column_stack((Xpast, Xf))
+
+	return Xpf
