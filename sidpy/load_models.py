@@ -9,6 +9,44 @@ import pandas
 import sdeint
 
 def load_model_data(model_name, N):
+	"""
+	Generate time series from various model systems, including:
+	
+		arch
+		(s)logistic
+		(s)henon
+		(s)lorenz
+		(s)rossler
+		(s)tent
+		setar
+
+	where the 's' prefix indicates a stochastic 
+	difference / differential equation  version of the standard
+	deterministic model.
+
+
+	Parameters
+	----------
+	model_name : str
+			The name of the model to use. See function description
+			for list of available models.
+
+	N : int
+			The number of time points to simulate from the model
+			system.
+
+	Returns
+	-------
+	x : numpy.array
+			The time series.
+	p_true : int
+			The true model order of the system. If not
+			a Markov model, p_true = numpy.inf
+	model_type : str
+			The model type.
+
+	"""
+
 	if model_name == 'arch':
 		# Simulate from an ARCH(1) model:
 		model_type = 'arch'
