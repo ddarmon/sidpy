@@ -13,6 +13,9 @@ import numpy
 
 import matplotlib.pyplot as plt
 
+import matplotlib.patches
+Rectangle = matplotlib.patches.Rectangle
+
 from sklearn import neighbors
 from sklearn.metrics import pairwise
 
@@ -65,7 +68,7 @@ def loocv_mse(n_neighbors, neighbor_inds, X):
 
 	return mse
 
-def choose_lag_mse(X, pow_upperbound = 0.5, nn_package = 'sklearn', announce_stages = False, output_verbose = True):
+def choose_lag_mse(X, pow_upperbound = 0.5, nn_package = 'sklearn', announce_stages = False, output_verbose = True, compute_w_farther_past = False):
 	Lp_norm = 2.
 
 	p_max = X.shape[1] - 1
@@ -75,7 +78,10 @@ def choose_lag_mse(X, pow_upperbound = 0.5, nn_package = 'sklearn', announce_sta
 	mse_by_p = []
 	kstar_by_p = []
 
-	ps = range(2, p_max + 1)
+	if compute_w_farther_past:
+		ps = range(1, p_max + 1)
+	else:	
+		ps = range(2, p_max + 1)
 
 	for p_use in ps:
 		X = X_full[:, (p_max - p_use):]
@@ -191,12 +197,13 @@ X_pf = sidpy.extract_multilag_from_embed(X, dt, Tp, tf, dm)
 
 numpy.random.seed(1)
 
-N = 50000
+# N = 50000
+N = 5000
 # N = 1000
 
-model_name = 'snanopore'
+# model_name = 'snanopore'
 # model_name = 'slorenz'
-# model_name = 'srossler'
+model_name = 'srossler'
 # model_name = 'shadow_crash'
 
 # model_name = 'slogistic'
@@ -204,29 +211,31 @@ model_name = 'snanopore'
 # model_name = 'lorenz'
 # model_name = 'rossler'
 
-x, p_true, model_type = load_models.load_model_data(model_name = model_name, N = N)
+x, p_true, model_type = load_models.load_model_data(model_name = model_name, N = N, ds_by = 1)
 
 dt = 1.0
-Tp = 10
-tf = 100
+Tp = 20
+tf = 30
 
 time = numpy.arange(0, len(x)*dt, dt)
 
 X = sidpy.embed_ts_multilag(x, dt, Tp, tf)
 TIME = sidpy.embed_ts_multilag(time, dt, Tp, tf)
 
-for dm in [1, 2, 4, 5, 8, 10]:
-	plt.figure()
-	plt.plot(TIME[0, :], X[0, :])
+# dms = [1, 2, 4, 5, 8, 10]
+# dms = [1, 2, 4, 8]
+dms = range(1, 6)
 
-	X_pf = sidpy.extract_multilag_from_embed(X, dt, Tp, tf, dm)
-	TIME_pf = sidpy.extract_multilag_from_embed(TIME, dt, Tp, tf, dm)
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#
+# Choose the optimal embedding parameters:
+#
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-	plt.plot(TIME_pf[0, :], X_pf[0, :], '.')
+mse_by_dm = numpy.zeros((len(dms), Tp+1))
+mse_by_dm = numpy.nan*mse_by_dm
 
-plt.show()
-
-for dm in [1, 2, 4, 5, 8, 10]:
+for dm_ind, dm in enumerate(dms):
 	print('\n\n')
 	print("Using dm = {}".format(dm))
 	X_pf = sidpy.extract_multilag_from_embed(X, dt, Tp, tf, dm)
@@ -235,6 +244,56 @@ for dm in [1, 2, 4, 5, 8, 10]:
 	pow_upperbound = 0.66
 	# pow_upperbound = 0.75
 
-	p_opt, mse_opt, mse_by_p, kstar_by_p = choose_lag_mse(X_pf, pow_upperbound = pow_upperbound, nn_package = 'sklearn', announce_stages = False, output_verbose = True)
+	if dm == 1:
+		p_opt, mse_opt, mse_by_p, kstar_by_p = choose_lag_mse(X_pf, pow_upperbound = pow_upperbound, nn_package = 'sklearn', announce_stages = False, output_verbose = True, compute_w_farther_past = True)
+		mse_by_dm[dm_ind, :len(mse_by_p)] = mse_by_p
+	else:
+		p_opt, mse_opt, mse_by_p, kstar_by_p = choose_lag_mse(X_pf, pow_upperbound = pow_upperbound, nn_package = 'sklearn', announce_stages = False, output_verbose = True)		
+		mse_by_dm[dm_ind, 0] = mse_by_dm[0, 0]
+		mse_by_dm[dm_ind, 1:len(mse_by_p)+1] = mse_by_p
+
+mse_argmin = numpy.nanargmin(mse_by_dm)
+
+inds_argmin = numpy.unravel_index(mse_argmin, mse_by_dm.shape)
+
+plt.figure()
+plt.matshow(numpy.log10(mse_by_dm))
+plt.colorbar()
+plt.scatter(inds_argmin[1], inds_argmin[0], color = 'red')
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#
+# Plot the different delay choices:
+#
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+t_cur = 60
+
+win_halfwidth = 100
+
+fig, ax = plt.subplots(len(dms), figsize = (20/1.5, 20/1.5))
+
+for dm_ind, dm in enumerate(dms):
+	ax[dm_ind].plot(TIME[:, 0], X[:, 0])
+
+	X_pf = sidpy.extract_multilag_from_embed(X, dt, Tp, tf, dm)
+	TIME_pf = sidpy.extract_multilag_from_embed(TIME, dt, Tp, tf, dm)
+
+	ax[dm_ind].scatter(TIME_pf[t_cur, :-2], X_pf[t_cur, :-2], s = 20, color = 'red')
+	ax[dm_ind].scatter(TIME_pf[t_cur, -2], X_pf[t_cur, -2], s = 40, color = 'blue')
+	ax[dm_ind].scatter(TIME_pf[t_cur, -1], X_pf[t_cur, -1], s = 40, color = 'green')
+	# ax[dm_ind].axvline(TIME_pf[t_cur, -2])
+	# ax[dm_ind].axvline(TIME[t_cur, 0])
+
+	rect = Rectangle((TIME[t_cur, 0], ax[dm_ind].get_ylim()[0]), width = Tp, height = numpy.diff(ax[dm_ind].get_ylim()), alpha = 0.25, color = 'red')
+
+	ax[dm_ind].add_patch(rect)
+
+	ax[dm_ind].set_xlim([t_cur - win_halfwidth, t_cur + win_halfwidth])
+
+ax[-1].set_xlabel("Time (au)")
+
+plt.figure(figsize = (15, 5))
+plt.plot(x)
 
 plt.show()

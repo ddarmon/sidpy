@@ -297,7 +297,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 
 		X = embed_ts(x, p_opt, is_multirealization = is_multirealization)
 
-		distances_marg, distances_joint = compute_nearest_neighbors(X, n_neighbors_untuned, Lp_norm = Lp_norm)
+		distances_marg, distances_joint, nn_inds_marg, nn_inds_joint = compute_nearest_neighbors(X, n_neighbors_untuned, Lp_norm = Lp_norm)
 
 		er_knn, ler_knn = estimate_ter(n_neighbors_untuned, distances_marg, distances_joint, p_opt, Lp_norm)
 
@@ -905,9 +905,9 @@ def compute_nearest_neighbors_1d(X, n_neighbors, Lp_norm = 2):
 
 	knn_out = knn.fit(Z)
 
-	distances, neighbor_inds = knn_out.kneighbors()
+	distances, nn_inds = knn_out.kneighbors()
 
-	return distances
+	return distances, nn_inds
 
 def compute_nearest_neighbors(X, n_neighbors, Lp_norm = 2):
 	Z = X
@@ -916,7 +916,7 @@ def compute_nearest_neighbors(X, n_neighbors, Lp_norm = 2):
 
 	knn_out = knn.fit(Z)
 
-	distances_joint, neighbor_inds = knn_out.kneighbors()
+	distances_joint, nn_inds_joint = knn_out.kneighbors()
 
 	Z = X[:, :-1]
 
@@ -924,9 +924,9 @@ def compute_nearest_neighbors(X, n_neighbors, Lp_norm = 2):
 
 	knn_out = knn.fit(Z)
 
-	distances_marg, neighbor_inds = knn_out.kneighbors()
+	distances_marg, nn_inds_marg = knn_out.kneighbors()
 
-	return distances_marg, distances_joint
+	return distances_marg, distances_joint, nn_inds_marg, nn_inds_joint
 
 def compute_nearest_neighbors_cross(Xfit, Xeval, n_neighbors, Lp_norm = 2):
 	knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
@@ -1366,11 +1366,11 @@ def estimate_ler_insample(x, p_opt, pow_neighbors = 0.75, n_neighbors = None, is
 		n_neighbors = int(numpy.ceil(numpy.power(X.shape[0] - 1, pow_neighbors)))
 
 	if p_opt == 0:
-		distances = compute_nearest_neighbors_1d(X, n_neighbors, Lp_norm = Lp_norm)
+		distances, nn_inds = compute_nearest_neighbors_1d(X, n_neighbors, Lp_norm = Lp_norm)
 
 		er_knn, ler_knn = estimate_ter_1d(n_neighbors, distances, Lp_norm)
 	else:
-		distances_marg, distances_joint = compute_nearest_neighbors(X, n_neighbors, Lp_norm = Lp_norm)
+		distances_marg, distances_joint, nn_inds_marg, nn_inds_joint = compute_nearest_neighbors(X, n_neighbors, Lp_norm = Lp_norm)
 
 		er_knn, ler_knn = estimate_ter(n_neighbors, distances_marg, distances_joint, p_opt, Lp_norm)
 
@@ -1433,7 +1433,7 @@ def estimate_lce_insample(X, pow_neighbors = 0.75, n_neighbors = None):
 	# else:
 	# 	print("Warning: Overriding pow_neighbors to take n_neighbors = {}".format(n_neighbors))
 
-	distances_marg, distances_joint = compute_nearest_neighbors(X, n_neighbors, Lp_norm = Lp_norm)
+	distances_marg, distances_joint, nn_inds_marg, nn_inds_joint = compute_nearest_neighbors(X, n_neighbors, Lp_norm = Lp_norm)
 
 	er_knn, ler_knn = estimate_ter(n_neighbors, distances_marg, distances_joint, X.shape[1] - 1, Lp_norm)
 

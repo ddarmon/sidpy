@@ -8,7 +8,7 @@ import pandas
 
 import sdeint
 
-def load_model_data(model_name, N):
+def load_model_data(model_name, N, ds_by = None):
 	"""
 	Generate time series from various model systems, including:
 	
@@ -34,6 +34,10 @@ def load_model_data(model_name, N):
 	N : int
 			The number of time points to simulate from the model
 			system.
+
+	ds_by : int
+			Specify the amount to downsample a continuous-time
+			time series by. By default, use the hard coded values.
 
 	Returns
 	-------
@@ -216,7 +220,8 @@ def load_model_data(model_name, N):
 
 		h = 0.05
 
-		ds_by = 2
+		if ds_by == None:
+			ds_by = 2
 
 		ttot = N*h*ds_by
 		tburn = 20
@@ -266,7 +271,8 @@ def load_model_data(model_name, N):
 
 		h = 0.05
 
-		ds_by = 5
+		if ds_by == None:
+			ds_by = 5
 
 		ttot = N*h*ds_by
 		tburn = 100
@@ -327,7 +333,8 @@ def load_model_data(model_name, N):
 
 		p_true = numpy.inf
 
-		ds_by = 2
+		if ds_by == None:
+			ds_by = 2
 
 		delta_t=0.25
 		T_final = ds_by*N*delta_t
@@ -367,7 +374,8 @@ def load_model_data(model_name, N):
 
 		h = 0.05
 
-		ds_by = 2
+		if ds_by == None:
+			ds_by = 2
 
 		ttot = N*h*ds_by
 		tburn = 20

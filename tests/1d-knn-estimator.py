@@ -12,7 +12,7 @@ import numpy
 
 import scipy.stats
 
-N = 100000
+N = 1000000
 
 x = numpy.random.rand(N)
 
