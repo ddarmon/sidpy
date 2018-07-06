@@ -8,6 +8,8 @@ import pandas
 
 import sdeint
 
+from scipy.stats import norm
+
 def load_model_data(model_name, N, ds_by = None):
 	"""
 	Generate time series from various model systems, including:
@@ -417,3 +419,37 @@ def load_model_data(model_name, N, ds_by = None):
 		x = result[:, 0]
 
 	return x, p_true, model_type
+
+def load_model_data_io(model_name, N, ds_by = None):
+	if model_name == 'starx':
+		p_true = (1, 2)
+		model_type = 'nlar'
+
+		burnin = 100
+
+		Ntot = burnin + N
+
+		c = 0.8
+		d = 1
+		a1 = 2
+		a0 = 1
+		b1 = 0.5
+		b0 = -0.5
+		s = 1
+
+		Y = numpy.zeros(Ntot)
+		X = numpy.zeros(Ntot)
+
+		epsX = numpy.random.randn(Ntot)
+		epsY = numpy.random.randn(Ntot)
+
+		for t in range(1, Ntot):
+			w = norm.cdf(Y[t-1])
+
+			Y[t] = c*Y[t-1] + d*epsX[t]
+			X[t] = w*(b1*X[t-1] + a1*epsY[t]) + (1-w)*(b0*X[t-1] + a0*epsY[t])
+
+		Y = Y[burnin:]
+		X = X[burnin:]
+
+	return Y, X, p_true, model_type
