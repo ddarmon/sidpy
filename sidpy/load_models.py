@@ -452,4 +452,32 @@ def load_model_data_io(model_name, N, ds_by = None):
 		Y = Y[burnin:]
 		X = X[burnin:]
 
+	if model_name == 'shenon':
+		p_true = (2, 2)
+		model_type = 'nlar'
+
+		burnin = 100
+
+		Ntot = burnin + N
+
+		C = 0.6
+
+		s = 0.004
+
+		Y = numpy.zeros((2, Ntot))
+		X = numpy.zeros((2, Ntot))
+
+		noise = s*numpy.random.randn(Ntot*4).reshape(4, -1)
+
+		for t in range(1, Ntot):
+			Y[0, t] = 1.4 - Y[0, t-1]**2 + 0.3*Y[1, t-1] + noise[0, t]
+			Y[1, t] = Y[0, t-1] + noise[1, t]
+
+			X[0, t] = 1.4 - (C*Y[0, t-1] + (1-C)*X[0, t-1])*X[0, t-1] + 0.3*X[1, t-1] + noise[2, t]
+			X[1, t] = X[0, t-1] + noise[3, t]
+
+		Y = Y[0, burnin:]
+		X = X[0, burnin:]
+
+
 	return Y, X, p_true, model_type
