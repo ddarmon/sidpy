@@ -1843,6 +1843,84 @@ def smooth(x,window_len=11,window='hanning'):
 	y=numpy.convolve(w/w.sum(),s,mode='valid')
 	return y
 
+def estimate_ais(x, p, n_neighbors = 5):
+	"""
+	Estimate the active information storage between the future and
+	a past of length p_opt,
+
+		$A(p) = I[X_{t} ^ X_{t-p}^{t-1}]$
+
+	We use the Java Information Dynamics Toolbox (JIDT) to estimate
+	the active information storage, using the KSG-style mutual
+	information estimator.
+
+	Parameters
+	----------
+	x : numpy.array
+			The time series
+	p : int
+			The order of the active information storage to estimate.
+	k : int
+			The number of nearest neighbors to use in estimating
+			the local transfer entropy.
+
+	Returns
+	-------
+	ais_estimate : float
+			The estimated active information storage,
+			using the second KSG estimator.
+
+	Notes
+	-----
+	Any notes go here.
+
+	Examples
+	--------
+	>>> import module_name
+	>>> # Demonstrate code here.
+
+	"""
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Initialize JIDT:
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	jarLocation = '../jidt/infodynamics.jar'
+
+	if not isJVMStarted():
+		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
+
+	implementingClass = "infodynamics.measures.continuous.kraskov.MutualInfoCalculatorMultiVariateKraskov2"
+	indexOfLastDot = string.rfind(implementingClass, ".")
+	implementingPackage = implementingClass[:indexOfLastDot]
+	implementingBaseName = implementingClass[indexOfLastDot+1:]
+	miCalcClass = eval('JPackage(\'%s\').%s' % (implementingPackage, implementingBaseName))
+	miCalc = miCalcClass()
+
+	# Turn off the (artificial) addition of 
+	# observational noise:
+
+	miCalc.setProperty("NOISE_LEVEL_TO_ADD", "0")
+
+	# Set the nearest neighbor parameter:
+
+	miCalc.setProperty("k", "{}".format(n_neighbors))
+
+	X_ais = embed_ts(x, p_max = p)
+
+	sourceArray = X_ais[:, :-1]
+	destArray = X_ais[:, -1].reshape(-1, 1)
+
+	miCalc.initialise(sourceArray.shape[1], 1)
+
+	miCalc.setObservations(sourceArray, destArray)
+
+	ais_estimate = miCalc.computeAverageLocalOfObservations()
+
+	return ais_estimate
+
 def estimate_lte(y, x, q, p, delay, k = 5):
 	#tmp_lte, tmp_tte = estimate_lte(y, x, q_IO, p_O, delay = 0, k = 5)
 	"""
