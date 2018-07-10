@@ -460,14 +460,22 @@ def load_model_data_io(model_name, N, ds_by = None):
 
 		Ntot = burnin + N
 
-		C = 0.6
+		# C = 0.6 # Used in STE paper.
+		C = 0.01
 
-		s = 0.004
+		# s = 0.004 # Used in STE paper
+		# s = 2*0.004
+
+		sY = 0.008
+		sX = 0.008
 
 		Y = numpy.zeros((2, Ntot))
 		X = numpy.zeros((2, Ntot))
 
-		noise = s*numpy.random.randn(Ntot*4).reshape(4, -1)
+		noise = numpy.random.randn(Ntot*4).reshape(4, -1)
+
+		noise[:2, :] = noise[0:2, :]*sX
+		noise[2:, :] = noise[0:2, :]*sY
 
 		for t in range(1, Ntot):
 			Y[0, t] = 1.4 - Y[0, t-1]**2 + 0.3*Y[1, t-1] + noise[0, t]
@@ -476,8 +484,59 @@ def load_model_data_io(model_name, N, ds_by = None):
 			X[0, t] = 1.4 - (C*Y[0, t-1] + (1-C)*X[0, t-1])*X[0, t-1] + 0.3*X[1, t-1] + noise[2, t]
 			X[1, t] = X[0, t-1] + noise[3, t]
 
+			Z = numpy.concatenate((Y[:, t], X[:, t]))
+			Znorm = numpy.linalg.norm(Z)
+
+			if Znorm >= 4:
+				J = int(numpy.random.choice(1000))
+
+				Y[:, t] = Y[:, J]
+				X[:, t] = X[:, J]
+
 		Y = Y[0, burnin:]
 		X = X[0, burnin:]
+
+	if 'lorenz96' in model_name:
+		model_type = 'nlar'
+		p_true = numpy.inf
+		h = 0.01
+
+		dim = 47
+
+		if ds_by == None:
+			ds_by = 5
+
+		ttot = N*h*ds_by
+		tburn = 100
+		tf = ttot + tburn
+
+		tspan = numpy.linspace(0.0, tf, int(tf/h))
+		x0 = numpy.random.rand(dim)
+
+		def F(X, t):
+			d = len(X)
+			dX = numpy.zeros(d)
+
+			for k in range(d):
+				dX[k] = (X[(k + 1) % d] - X[(k - 2) % d])*X[(k - 1) % d] - X[k] + 5
+
+			return dX
+
+		def G(x, t):
+		    return B
+
+		# dyn_noise = 0
+		dyn_noise = 0.5
+
+		B = numpy.diag([dyn_noise]*dim)
+
+		result = sdeint.itoint(F, G, x0, tspan)
+
+		tspan = tspan[int(tburn/h)::ds_by]
+		result = result[int(tburn/h)::ds_by, :]
+
+		Y = result[:, 0]
+		X = result[:, 1]
 
 
 	return Y, X, p_true, model_type
