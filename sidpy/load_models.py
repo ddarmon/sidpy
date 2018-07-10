@@ -461,7 +461,8 @@ def load_model_data_io(model_name, N, ds_by = None):
 		Ntot = burnin + N
 
 		# C = 0.6 # Used in STE paper.
-		C = 0.01
+		C = 0.1
+		# C = 0.01
 
 		# s = 0.004 # Used in STE paper
 		# s = 2*0.004
@@ -499,12 +500,14 @@ def load_model_data_io(model_name, N, ds_by = None):
 	if 'lorenz96' in model_name:
 		model_type = 'nlar'
 		p_true = numpy.inf
-		h = 0.01
+		# h = 0.01
+		h = 0.05
 
 		dim = 47
 
 		if ds_by == None:
-			ds_by = 5
+			# ds_by = 5
+			ds_by = 2
 
 		ttot = N*h*ds_by
 		tburn = 100

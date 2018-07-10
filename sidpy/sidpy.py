@@ -369,10 +369,6 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 			The minimized value NLPL(q_opt,p_opt).
 	nlpl_by_qp : list
 			The NLPL as a function of the model orders.
-	kstar_by_qp : list
-			The tuned values of k to use for the
-			k-nearest neighbor predictor as a function
-			of the model orders.
 
 	"""
 
