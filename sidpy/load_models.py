@@ -533,7 +533,28 @@ def load_model_data_io(model_name, N, ds_by = None):
 
 		B = numpy.diag([dyn_noise]*dim)
 
-		result = sdeint.itoint(F, G, x0, tspan)
+		state_array_size = dim*tspan.nbytes # Size of state array in B
+		state_array_size/1000000. # Size of state array in GB
+
+		N_biggest = 1000
+
+		if N > N_biggest:
+			num_segments = int(N / N_biggest)+1
+			tp_per_segment = int(N_biggest*ds_by)
+			for seg_ind in range(num_segments):
+				print("On segment {} of {}...".format(seg_ind+1, num_segments))
+				result_cur = sdeint.itoint(F, G, x0, tspan[seg_ind*tp_per_segment:(seg_ind+1)*tp_per_segment])
+
+				if seg_ind == 0:
+					result = result_cur
+				else:
+					result = numpy.concatenate((result, result_cur))
+
+				x0 = result[-1, :]
+
+				# ipdb.set_trace()
+		else:
+			result = sdeint.itoint(F, G, x0, tspan)		
 
 		tspan = tspan[int(tburn/h)::ds_by]
 		result = result[int(tburn/h)::ds_by, :]
