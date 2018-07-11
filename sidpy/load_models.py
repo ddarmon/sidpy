@@ -420,7 +420,7 @@ def load_model_data(model_name, N, ds_by = None):
 
 	return x, p_true, model_type
 
-def load_model_data_io(model_name, N, ds_by = None):
+def load_model_data_io(model_name, N, ds_by = None, dim = None):
 	if model_name == 'starx':
 		p_true = (1, 2)
 		model_type = 'nlar'
@@ -461,7 +461,7 @@ def load_model_data_io(model_name, N, ds_by = None):
 		Ntot = burnin + N
 
 		# C = 0.6 # Used in STE paper.
-		C = 0.1
+		C = 0.2
 		# C = 0.01
 
 		# s = 0.004 # Used in STE paper
@@ -503,7 +503,8 @@ def load_model_data_io(model_name, N, ds_by = None):
 		# h = 0.01
 		h = 0.05
 
-		dim = 47
+		if dim == None:
+			dim = 47
 
 		if ds_by == None:
 			# ds_by = 5
