@@ -2120,6 +2120,77 @@ def estimate_ais(x, p, n_neighbors = 5):
 
 	return ais_estimate
 
+def estimate_mi(X, Y, n_neighbors = 5):
+	"""
+	Estimate the mutual information between X and Y, using the 
+	Java Information Dynamics Toolbox (JIDT) implementation of
+	the KSG-style mutual information estimator.
+
+	Parameters
+	----------
+	X : numpy.array
+			Realizations from the first random variable.
+	Y : numpy.array
+			Realizations from the second random variable.
+	n_neighbors : int
+			The number of nearest neighbors to use in estimating
+			the local transfer entropy.
+
+	Returns
+	-------
+	mi_estimate : float
+			The estimated mutual information between X and Y,
+			using the second KSG estimator.
+
+	Notes
+	-----
+	Any notes go here.
+
+	Examples
+	--------
+	>>> import module_name
+	>>> # Demonstrate code here.
+
+	"""
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Initialize JIDT:
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	jarLocation = '../jidt/infodynamics.jar'
+
+	if not isJVMStarted():
+		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
+
+	implementingClass = "infodynamics.measures.continuous.kraskov.MutualInfoCalculatorMultiVariateKraskov2"
+	indexOfLastDot = string.rfind(implementingClass, ".")
+	implementingPackage = implementingClass[:indexOfLastDot]
+	implementingBaseName = implementingClass[indexOfLastDot+1:]
+	miCalcClass = eval('JPackage(\'%s\').%s' % (implementingPackage, implementingBaseName))
+	miCalc = miCalcClass()
+
+	# Turn off the (artificial) addition of 
+	# observational noise:
+
+	miCalc.setProperty("NOISE_LEVEL_TO_ADD", "0")
+
+	# Set the nearest neighbor parameter:
+
+	miCalc.setProperty("k", "{}".format(n_neighbors))
+
+	sourceArray = X.reshape(-1, 1)
+	destArray = Y.reshape(-1, 1)
+
+	miCalc.initialise(sourceArray.shape[1], destArray.shape[1])
+
+	miCalc.setObservations(sourceArray, destArray)
+
+	mi_estimate = miCalc.computeAverageLocalOfObservations()
+
+	return mi_estimate
+
 def estimate_lte(y, x, q, p, delay, k = 5):
 	#tmp_lte, tmp_tte = estimate_lte(y, x, q_IO, p_O, delay = 0, k = 5)
 	"""
