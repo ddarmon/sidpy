@@ -10,7 +10,7 @@ import sdeint
 
 from scipy.stats import norm
 
-def load_model_data(model_name, N, ds_by = None):
+def load_model_data(model_name, N, ds_by = None, dt = None):
 	"""
 	Generate time series from various model systems, including:
 	
@@ -150,13 +150,13 @@ def load_model_data(model_name, N, ds_by = None):
 
 		x[0] = numpy.random.rand(1)
 		for t in range(1, x.shape[0]):
-		    if x[t-1] < 0.5:
-		        x[t] = 3.68/2.*x[t-1] + 0.4*noise[t]
-		    else:
-		        x[t] = 3.68/2. - 3.68/2.*x[t-1] + 0.4*noise[t]
+			if x[t-1] < 0.5:
+				x[t] = 3.68/2.*x[t-1] + 0.4*noise[t]
+			else:
+				x[t] = 3.68/2. - 3.68/2.*x[t-1] + 0.4*noise[t]
 
-		    if x[t] <= 0:
-		       x[t] = numpy.random.rand(1)
+			if x[t] <= 0:
+			   x[t] = numpy.random.rand(1)
 
 	if model_name == 'setar':
 		model_type = 'setar'
@@ -211,16 +211,21 @@ def load_model_data(model_name, N, ds_by = None):
 
 		for n in range(2, x.shape[0]):
 		  if x[n-2] <= 3.25:
-		      x[n] = 0.62 + 1.25*x[n-1] - 0.43*x[n-2] + numpy.sqrt(0.0381)*u[n]
+			  x[n] = 0.62 + 1.25*x[n-1] - 0.43*x[n-2] + numpy.sqrt(0.0381)*u[n]
 		  else:
-		      x[n] = 2.25 + 1.52*x[n-1] - 1.24*x[n-2] + numpy.sqrt(0.0626)*u[n]
+			  x[n] = 2.25 + 1.52*x[n-1] - 1.24*x[n-2] + numpy.sqrt(0.0626)*u[n]
+
+
 
 	if 'lorenz' in model_name:
 		model_type = 'nlar'
 
 		p_true = 4
 
-		h = 0.05
+		if dt == None:
+			h = 0.05
+		else:
+			h = dt
 
 		if ds_by == None:
 			ds_by = 2
@@ -248,7 +253,7 @@ def load_model_data(model_name, N, ds_by = None):
 			return dX
 
 		def G(x, t):
-		    return B
+			return B
 
 		dim = 3
 
@@ -299,7 +304,7 @@ def load_model_data(model_name, N, ds_by = None):
 			return dX
 
 		def G(x, t):
-		    return B
+			return B
 
 		dim = 3
 
@@ -319,6 +324,64 @@ def load_model_data(model_name, N, ds_by = None):
 		x = result[:, 0]
 		y = result[:, 1]
 		z = result[:, 2]
+
+	if 'loriei' in model_name:
+		model_type = 'nlar'
+
+		p_true = 4
+
+		# dt = 0.005 # Used in spenra paper
+		dt = 0.05
+
+		N_sim = int(N*2/dt)
+
+		# To generate 
+
+		threshold_val = 50
+
+		if model_name == 'loriei':
+			model_name = 'lorenz'
+		else:
+			model_name = 'slorenz'
+
+		x, p_true, model_type = load_model_data(model_name, N_sim, ds_by = 1, dt = dt)
+
+		time = numpy.linspace(0, N_sim*dt, num = N_sim)
+
+		s = x + 25
+
+		S = numpy.cumsum(s)*dt
+
+		crossing_times = []
+
+		for iei_ind in range(1, N):
+			cur_thresh = iei_ind*threshold_val
+
+			where_out = numpy.where((S - cur_thresh > 0))
+
+			try:
+				cross_ind = where_out[0][0]
+
+				cross_time = time[cross_ind]
+
+				# plt.axhline(cur_thresh)
+				# plt.axvline(cross_time)
+
+				y0 = S[cross_ind - 1]; y1 = S[cross_ind]
+				x0 = time[cross_ind - 1]; x1 = time[cross_ind]
+
+				m = (y1 - y0)/float(x1 - x0)
+
+				xc = (cur_thresh - y0)/m + x0
+
+				# plt.plot(xc, cur_thresh, '.', color = 'green')
+
+				crossing_times.append(xc)
+			except:
+				break
+
+		iei = numpy.diff(crossing_times)
+		x = iei
 
 	if model_name == 'snanopore':
 		a=1.
@@ -527,7 +590,7 @@ def load_model_data_io(model_name, N, ds_by = None, dim = None):
 			return dX
 
 		def G(x, t):
-		    return B
+			return B
 
 		# dyn_noise = 0
 		dyn_noise = 0.5
