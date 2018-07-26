@@ -2862,7 +2862,7 @@ def estimate_ste_iopo(y, x, q, p_io, p_o, delay, lTEs, pow_neighbors = 0.5, verb
 
 	return sTEs
 
-def generate_refined_aaft_surrogate(x, seed = None, print_spectra_error = False, to_plot = False):
+def generate_refined_aaft_surrogate(x, num_iterations = None, seed = None, print_spectra_error = False, to_plot = False):
 	"""
 	Generate refined amplitude adjusted Fourier transform (AAFT) surrogates,
 	following the method from 
@@ -2881,6 +2881,10 @@ def generate_refined_aaft_surrogate(x, seed = None, print_spectra_error = False,
 	----------
 	x : list or numpy.array
 			The original time series used to generate surrogates.
+	num_iterations : int
+			The number of loops through the AAFT refinement process.
+			If None, run until the change in the error is below a
+			fixed threshold.
 	seed : int
 			A seed for numpy's pseudo-random number generator.
 			Must be convertible to 32 bit unsigned integers.
@@ -2912,8 +2916,15 @@ def generate_refined_aaft_surrogate(x, seed = None, print_spectra_error = False,
 
 	"""
 
+	spec_change_tol = 0.0000001
+
+	if num_iterations == None:
+		num_iterations = 100
+
 	if seed is not None:
 		numpy.random.seed(seed)
+
+	spec_orig = numpy.abs(numpy.fft.fft(x))
 
 	# Sort the original time series and compute
 	# its Fast Fourier Transform, along with the
@@ -2943,11 +2954,17 @@ def generate_refined_aaft_surrogate(x, seed = None, print_spectra_error = False,
 
 	numpy.random.shuffle(xstar)
 
+	spec_surr = numpy.abs(numpy.fft.fft(xstar))
+
+	spec_error_old = numpy.mean(numpy.power(spec_orig - spec_surr, 2))
+
 	# Iterate the refined AAFT procedure:
 
-	num_iterations = 100
+	continue_loop = True
 
-	for n in range(num_iterations):
+	iter_counter = 0
+
+	while continue_loop:
 		# Match the Fourier amplitudes of the original
 		# and surrogate time series while maintaining
 		# the phases.
@@ -2963,18 +2980,18 @@ def generate_refined_aaft_surrogate(x, seed = None, print_spectra_error = False,
 
 		xstar = numpy.real(numpy.fft.ifft(Xstarfft))
 
-		if to_plot and (num_iterations - n) <= 1:
-			plt.figure()
-			plt.plot(x)
-			plt.plot(xstar)
+		# if to_plot and (num_iterations - n) <= 1:
+		# 	plt.figure()
+		# 	plt.plot(x)
+		# 	plt.plot(xstar)
 
-			fig, ax = plt.subplots(2)
-			ax[0].hist(x, bins = 50)
-			ax[1].hist(xstar, bins = 50)
+		# 	fig, ax = plt.subplots(2)
+		# 	ax[0].hist(x, bins = 50)
+		# 	ax[1].hist(xstar, bins = 50)
 
-			plt.figure()
-			plt.plot(numpy.abs(numpy.fft.fft(x))[1:x.shape[0]//2])
-			plt.plot(numpy.abs(numpy.fft.fft(xstar))[1:x.shape[0]//2])
+		# 	plt.figure()
+		# 	plt.plot(numpy.abs(numpy.fft.fft(x))[1:x.shape[0]//2])
+		# 	plt.plot(numpy.abs(numpy.fft.fft(xstar))[1:x.shape[0]//2])
 
 		# Recover the time series amplitudes by using
 		# a rank ordering of the surrogate time series.
@@ -2984,21 +3001,46 @@ def generate_refined_aaft_surrogate(x, seed = None, print_spectra_error = False,
 
 		xstar = xsort[ranks]
 
-		if to_plot and (num_iterations - n) <= 1:
-			plt.figure()
-			plt.plot(x)
-			plt.plot(xstar)
+		spec_surr = numpy.abs(numpy.fft.fft(xstar))
 
-			fig, ax = plt.subplots(2)
-			ax[0].hist(x, bins = 50)
-			ax[1].hist(xstar, bins = 50)
+		# if to_plot and (num_iterations - n) <= 1:
+		# 	plt.figure()
+		# 	plt.plot(x)
+		# 	plt.plot(xstar)
 
-			plt.figure()
-			plt.plot(numpy.abs(numpy.fft.fft(x))[1:x.shape[0]//2])
-			plt.plot(numpy.abs(numpy.fft.fft(xstar))[1:x.shape[0]//2])
+		# 	fig, ax = plt.subplots(2)
+		# 	ax[0].hist(x, bins = 50)
+		# 	ax[1].hist(xstar, bins = 50)
+
+		# 	plt.figure()
+		# 	plt.plot(numpy.abs(numpy.fft.fft(x))[1:x.shape[0]//2])
+		# 	plt.plot(numpy.abs(numpy.fft.fft(xstar))[1:x.shape[0]//2])
+
+		spec_error_new = numpy.mean(numpy.power(spec_orig - spec_surr, 2))
 
 		if print_spectra_error:
-			print((numpy.mean(numpy.power(numpy.abs(numpy.fft.fft(x)) - numpy.abs(numpy.fft.fft(xstar)), 2))))
+			print(spec_error_new)
+
+		if numpy.abs(spec_error_new - spec_error_old)/numpy.abs(spec_error_old) < spec_change_tol or iter_counter == num_iterations:
+			continue_loop = False
+
+			if to_plot:
+				plt.figure()
+				plt.plot(x)
+				plt.plot(xstar)
+
+				fig, ax = plt.subplots(2)
+				ax[0].hist(x, bins = 'auto')
+				ax[1].hist(xstar, bins = 'auto')
+
+				plt.figure()
+				plt.plot(spec_orig[1:x.shape[0]//2])
+				plt.plot(spec_surr[1:x.shape[0]//2])
+		else:
+			continue_loop = True
+			iter_counter += 1
+
+			spec_error_old = spec_error_new
 
 	return xstar
 
