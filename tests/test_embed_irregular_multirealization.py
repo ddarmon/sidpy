@@ -4,7 +4,7 @@ username = getpass.getuser()
 
 import sys
 
-sys.path.append('/Users/{}/Documents/Reference/G/github/sidpy/sidpy'.format(username))
+sys.path.append('../sidpy')
 
 import sidpy
 
