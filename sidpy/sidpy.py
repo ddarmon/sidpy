@@ -2092,7 +2092,7 @@ def estimate_ais(x, p, n_neighbors = 5):
 		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
 
 	implementingClass = "infodynamics.measures.continuous.kraskov.MutualInfoCalculatorMultiVariateKraskov2"
-	indexOfLastDot = string.rfind(implementingClass, ".")
+	indexOfLastDot = str.rfind(implementingClass, ".")
 	implementingPackage = implementingClass[:indexOfLastDot]
 	implementingBaseName = implementingClass[indexOfLastDot+1:]
 	miCalcClass = eval('JPackage(\'%s\').%s' % (implementingPackage, implementingBaseName))
@@ -2165,7 +2165,7 @@ def estimate_mi(X, Y, n_neighbors = 5):
 		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
 
 	implementingClass = "infodynamics.measures.continuous.kraskov.MutualInfoCalculatorMultiVariateKraskov2"
-	indexOfLastDot = string.rfind(implementingClass, ".")
+	indexOfLastDot = str.rfind(implementingClass, ".")
 	implementingPackage = implementingClass[:indexOfLastDot]
 	implementingBaseName = implementingClass[indexOfLastDot+1:]
 	miCalcClass = eval('JPackage(\'%s\').%s' % (implementingPackage, implementingBaseName))
@@ -2264,7 +2264,7 @@ def estimate_lte(y, x, q, p, delay, k = 5):
 		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
 
 	implementingClass = "infodynamics.measures.continuous.kraskov.TransferEntropyCalculatorKraskov"
-	indexOfLastDot = string.rfind(implementingClass, ".")
+	indexOfLastDot = str.rfind(implementingClass, ".")
 	implementingPackage = implementingClass[:indexOfLastDot]
 	implementingBaseName = implementingClass[indexOfLastDot+1:]
 	miCalcClass = eval('JPackage(\'%s\').%s' % (implementingPackage, implementingBaseName))
@@ -2472,7 +2472,7 @@ def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
 		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
 
 	implementingClass = "infodynamics.measures.continuous.kraskov.TransferEntropyCalculatorKraskov"
-	indexOfLastDot = string.rfind(implementingClass, ".")
+	indexOfLastDot = str.rfind(implementingClass, ".")
 	implementingPackage = implementingClass[:indexOfLastDot]
 	implementingBaseName = implementingClass[indexOfLastDot+1:]
 	miCalcClass = eval('JPackage(\'%s\').%s' % (implementingPackage, implementingBaseName))
