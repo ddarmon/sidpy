@@ -427,7 +427,7 @@ def load_model_data(model_name, N, ds_by = None, dt = None):
 			B=numpy.diag([alpha,beta])
 			return B
 
-		print 'Solving SDE...'
+		print('Solving SDE...')
 
 		result = sdeint.itoint(f, G, x0, tspan)
 
