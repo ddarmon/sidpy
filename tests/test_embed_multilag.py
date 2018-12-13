@@ -4,7 +4,7 @@ username = getpass.getuser()
 
 import sys
 
-sys.path.append('/Users/{}/Documents/Reference/G/github/sidpy/sidpy'.format(username))
+sys.path.append('../sidpy')
 
 import sidpy
 import load_models
@@ -197,13 +197,13 @@ X_pf = sidpy.extract_multilag_from_embed(X, dt, Tp, tf, dm)
 
 numpy.random.seed(1)
 
-# N = 50000
-N = 5000
+N = 50000
+# N = 5000
 # N = 1000
 
 # model_name = 'snanopore'
-# model_name = 'slorenz'
-model_name = 'srossler'
+model_name = 'slorenz'
+# model_name = 'srossler'
 # model_name = 'shadow_crash'
 
 # model_name = 'slogistic'
