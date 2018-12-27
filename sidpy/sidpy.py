@@ -2042,7 +2042,7 @@ def smooth(x,window_len=11,window='hanning'):
 	y=numpy.convolve(w/w.sum(),s,mode='valid')
 	return y
 
-def estimate_ais(x, p, n_neighbors = 5):
+def estimate_ais(x, p, n_neighbors = 5, fix_vm = False):
 	"""
 	Estimate the active information storage between the future and
 	a past of length p_opt,
@@ -2089,7 +2089,10 @@ def estimate_ais(x, p, n_neighbors = 5):
 	jarLocation = '../jidt/infodynamics.jar'
 
 	if not isJVMStarted():
-		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
+		if fix_vm:
+			startJVM(getDefaultJVMPath(), "-ea", "-Xmx1000m", "-Djava.class.path=" + jarLocation)
+		else:
+			startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
 
 	implementingClass = "infodynamics.measures.continuous.kraskov.MutualInfoCalculatorMultiVariateKraskov2"
 	indexOfLastDot = str.rfind(implementingClass, ".")
