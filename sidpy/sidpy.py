@@ -2090,8 +2090,8 @@ def estimate_ais(x, p, n_neighbors = 5, fix_vm = False):
 
 	if not isJVMStarted():
 		if fix_vm:
-			# startJVM(getDefaultJVMPath(), "-ea", "-Xmx1000m", "-Xms100m", "-Djava.class.path=" + jarLocation)
-			startJVM(getDefaultJVMPath(), "-ea", "-Xms15G", "-Xmx30G", "-Djava.class.path=" + jarLocation)
+			startJVM(getDefaultJVMPath(), "-ea", "-Xms10m",  "-Xmx100m", "-Xss100m", "-Djava.class.path=" + jarLocation)
+			# startJVM(getDefaultJVMPath(), "-ea", "-Xms15G", "-Xmx30G", "-Djava.class.path=" + jarLocation)
 		else:
 			startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
 
