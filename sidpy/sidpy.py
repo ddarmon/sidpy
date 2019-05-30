@@ -1820,6 +1820,104 @@ def estimate_ser_outsample(x_train, x_test, ler_train, p_opt, q = 0, pow_neighbo
 
 	return ser
 
+def estimate_ser_outsample_locfit(x_train, x_test, ler_train, p_opt, q = 0, sp = 0.7, maxk = 1000):
+	"""
+	Estimate the specific entropy rate out-of-sample by
+	evaluating the regression function estimated using x_train
+	and ler_train at the points given by the delay vectors of
+	x_test.
+
+	NOTE: ler_train should be computed using the same value of 
+	p as p_opt, so ler_train should have length len(x_train) - p_opt.
+
+	Parameters
+	----------
+	x_train : list
+			The in-sample time series used to estimate
+			the specific entropy rate.
+
+	x_test : list
+			The out-of-sample time series used to
+			evaluate the specific entropy rate estimator.
+
+	ler_train : numpy.array
+			The in-sample local entropy rate estimated
+			using p_opt with x_train.
+
+	p_opt : int
+			The model order used to estimate ler_train and ser.
+
+	q : int
+			The predictive horizon that the local entropy rate
+			was estimated over and the specific entropy rate
+			should be estimated over. Should be >= 0.
+
+	sp : float
+			A value in [0, 1] that what proportion of neighbors
+			are used to compute the local linear regression at
+			a given evaluation point.
+
+	Returns
+	-------
+	ser : numpy.array
+			The specific entropy rate estimated via 
+			regression of the local entropy rate on the
+			delay vectors. 
+
+			Will be length len(x) - p_opt.
+
+	Notes
+	-----
+	Any notes go here.
+
+	Examples
+	--------
+	>>> import module_name
+	>>> # Demonstrate code here.
+
+	"""
+
+	assert len(ler_train) == len(x_train) - (p_opt + q), "Error: Use estimated local entropy rate (ler_train) with the same model order p_opt and predictive horizon q."
+
+	if q == 0:
+		X_train = embed_ts(x_train, p_opt)
+		X_test	= embed_ts(x_test, p_opt)
+	else:
+		X_train = embed_ts_multihorizon(x_train, p_opt, q)
+		X_test	= embed_ts_multihorizon(x_test, p_opt, q)
+
+	from rpy2.robjects.packages import importr
+
+	import rpy2.robjects as robjects
+
+	locfit = importr('locfit')
+
+	r = robjects.r
+
+	rlocfit = r['locfit.raw'] 
+
+	rpredict = r['predict']
+
+	import rpy2.robjects.numpy2ri
+	rpy2.robjects.numpy2ri.activate()
+
+	nr, nc = X_train[:, :-1].shape
+
+	x_train = robjects.r.matrix(X_train[:, :-1], nrow = nr, ncol = nc)
+	y_train = robjects.FloatVector(ler_train)
+
+	nr, nc = X_test[:, :-1].shape
+	
+	x_test = robjects.r.matrix(X_test[:, :-1], nrow = nr, ncol = nc)
+
+	r_f = robjects.globalenv['choose.nn.splithalf']
+
+	locfit_out = rlocfit(x_train, y_train, alpha = sp, deg = 1, maxk = maxk)
+
+	ser = numpy.array(rpredict(locfit_out, x_test))
+
+	return ser
+
 def estimate_normalized_qstep_outsample(x_train, x_test, log_dist_ratio_train, p_opt, q, pow_neighbors = 0.75):
 	"""
 	Estimate the normalized q-step specific entropy rate 
@@ -3155,3 +3253,428 @@ def extract_multilag_from_embed(X, dt, Tp, tf, dm):
 	Xpf = numpy.column_stack((Xpast, Xf))
 
 	return Xpf
+
+def choose_k_for_ser_estimation(x, p_opt):
+	"""
+	choose_k_for_ser_estimation determines the number of 
+	nearest neighbors to use in the regression-based estimation
+	of specific entropy rate using split-half cross-validation
+
+
+	Parameters
+	----------
+	x : list or numpy.array
+			The time series as a list.
+	p_opt : int
+			The model order to use, chosen by an appropriate model 
+			selection routine like choose_model_order_nlpl or
+			choose_model_order_mse.
+
+	Returns
+	-------
+	k_opt : int
+			The number of nearest neighbors to use in the 
+			nearest neighbor-based estimation of SER.
+	s_opt : float
+			The exponent that gives k_opt, where k_opt is
+			given by 
+				k_opt = floor((T - p_opt)^s_opt)
+			Typically, s_opt should be chosen to be >= 0.5,
+			to ensure consistency of the nearest neighbor
+			estimator of the regression function [1].
+
+	References
+	----------
+
+	[1] Biau, G.; Devroye, L. Lectures on the Nearest Neighbor Method; Springer: Berlin, Germany, 2015.
+
+	"""
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Split the data into halves.
+	# 
+	# The "train" half is used to estimate the SER,
+	# as a function of k.
+	# 
+	# The "test" half is used to predict the SER as
+	# the expected value of the LER.
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	p_max = p_opt
+
+	X_full_train = embed_ts(x[:int(len(x)/2.)], p_max)
+	X_full_test  = embed_ts(x[int(len(x)/2.):], p_max)
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Compute the joint entropy h[X_{t-p*}^{t}]
+	# using the Kozachenko-Leonenko kth-nearest
+	# neighbor estimator.
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	X_train = X_full_train[:, (p_max - p_opt):]
+	X_test  = X_full_test[:, (p_max - p_opt):]
+	
+	s_max = 0.85
+	# s_max = 0.95
+
+	n_neighbors = 10
+
+	n_neighbors_max = numpy.max([n_neighbors, int(numpy.floor(numpy.power(X_train.shape[0], s_max)))])
+
+	Lp_norm = 2.
+
+	knn_for_ser = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ler = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+
+	knn_out_for_ser = knn_for_ser.fit(X_train)
+	knn_out_for_ler = knn_for_ler.fit(X_test)
+
+	distances_for_ser, neighbor_inds_for_ser = knn_out_for_ser.kneighbors()
+
+	distances_for_ler, neighbor_inds_for_ler = knn_out_for_ler.kneighbors()
+
+	cd = numpy.power(2*gamma(1 + 1/Lp_norm), X_train.shape[1])/gamma(1 + X_train.shape[1]/Lp_norm)
+
+	h_joint_for_ser = X_train.shape[1] * numpy.log(distances_for_ser[:, n_neighbors-1]) + numpy.log(cd)
+	h_joint_for_ler = X_train.shape[1] * numpy.log(distances_for_ler[:, n_neighbors-1]) + numpy.log(cd)
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Compute the marginal entropy h[X_{t-p*}^{t-1}]
+	# using the Kozachenko-Leonenko kth-nearest
+	# neighbor estimator.
+	# 
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	Z_train = X_train[:, :-1]
+	Z_test = X_test[:, :-1]
+
+	knn_for_ser = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ler = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+
+	knn_out_for_ser = knn_for_ser.fit(Z_train)
+	knn_out_for_ler = knn_for_ler.fit(Z_test)
+
+	distances_for_ser, neighbor_inds_for_ser = knn_out_for_ser.kneighbors()
+	distances_test, neighbor_inds = knn_out_for_ser.kneighbors(Z_test)
+
+	distances_for_ler, neighbor_inds_for_ler = knn_out_for_ler.kneighbors()
+
+	cd = numpy.power(2*gamma(1 + 1/Lp_norm), Z_train.shape[1])/gamma(1 + Z_train.shape[1]/Lp_norm)
+
+	h_marg_for_ser = Z_train.shape[1] * numpy.log(distances_for_ser[:, n_neighbors-1]) + numpy.log(cd)
+	h_marg_for_ler = Z_train.shape[1] * numpy.log(distances_for_ler[:, n_neighbors-1]) + numpy.log(cd)
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Estimate the local entropy rate as the difference
+	# between the joint and marginal entropies:
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	ler_for_ser = h_joint_for_ser - h_marg_for_ser
+	ler_for_ler = h_joint_for_ler - h_marg_for_ler
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Estimate the specific entropy rate by regressing
+	# the local entropy rate on the past via 
+	# k-nearest neighbors regression, recalling that
+	# 
+	# LER = -log f(X_{t} | X_{t-p}^{t-1})
+	# 
+	# and 
+	# 
+	# SER = E[-log f(X_{t} | X_{t-p}^{t-1}) | X_{t-p}^{t-1} = x_{t-p}^{t-1}]
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	ss = numpy.arange(0.1, s_max, 0.0125/2.)
+
+	ks = map(int, numpy.floor(numpy.power(X_train.shape[0], ss)))
+
+	prop_of_ts = numpy.array(ks) / float(X_train.shape[0])
+
+	err_by_ks = []
+
+	for k_ind, n_neighbors in enumerate(ks):
+		print 'Estimating SER (k* = {})...'.format(n_neighbors)
+
+		ser = numpy.mean(ler_for_ser[neighbor_inds[:, :n_neighbors]], axis = 1)
+
+		# err_ser = numpy.mean(numpy.power(ser - ler_for_ler, 2))
+		err_ser = numpy.mean(numpy.abs(ser - ler_for_ler))
+
+		err_by_ks += [err_ser]
+
+		print 'Using k* = {} (s = {}), the MSE is {}...'.format(n_neighbors, ss[k_ind], err_ser)
+
+	arg_min_err = numpy.argmin(err_by_ks)
+
+	k_opt = ks[arg_min_err]
+	s_opt = ss[arg_min_err]
+
+	print 's* = {}, giving k* = {}...'.format(ss[arg_min_err], k_opt)
+
+	return k_opt, s_opt
+
+def choose_k_for_ser_estimation_locfit(x, p_opt, maxk = 1000):
+	"""
+	choose_k_for_ser_estimation determines the number of 
+	nearest neighbors to use in the regression-based estimation
+	of specific entropy rate using split-half cross-validation
+
+
+	Parameters
+	----------
+	x : list or numpy.array
+			The time series as a list.
+	p_opt : int
+			The model order to use, chosen by an appropriate model 
+			selection routine like choose_model_order_nlpl or
+			choose_model_order_mse.
+	maxk : int
+			The maximum number of vertices locfit uses in its
+			adaptive tree for determining evaluation points.
+
+	Returns
+	-------
+	k_opt : int
+			The number of nearest neighbors to use in the 
+			nearest neighbor-based estimation of SER.
+	s_opt : float
+			The exponent that gives k_opt, where k_opt is
+			given by 
+				k_opt = floor((T - p_opt)^s_opt)
+			Typically, s_opt should be chosen to be >= 0.5,
+			to ensure consistency of the nearest neighbor
+			estimator of the regression function [1].
+
+	References
+	----------
+
+	[1] Biau, G.; Devroye, L. Lectures on the Nearest Neighbor Method; Springer: Berlin, Germany, 2015.
+
+	"""
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Split the data into halves.
+	# 
+	# The "train" half is used to estimate the SER,
+	# by regressing LER on the past. Thus, the
+	# training half provides an estimate of the
+	# function:
+	# 	h(x_{t-p}^{t-1}) = E[-log f(X_{t} \mid X_{t-p}^{t-1}) \mid X_{t-p}^{t-1} = x_{t-p}^{t-1}]
+	# 
+	# The "test" half is used to predict the LER from
+	# the test half using the SER function from the first
+	# half. The SER function should, on average give the
+	# LER, so this is a standard split-half crossvalidation.
+	# 
+	# This is done to choose the tuning parameter alpha
+	# for locfit, which sets the nearest neighbor number
+	# used to determine local bandwidths at each 
+	# evaluation point.
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	p_max = p_opt
+
+	X_full_train = embed_ts(x[:int(len(x)/2.)], p_max)
+	X_full_test  = embed_ts(x[int(len(x)/2.):], p_max)
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Compute the joint entropy h[X_{t-p*}^{t}]
+	# using the Kozachenko-Leonenko kth-nearest
+	# neighbor estimator.
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	X_train = X_full_train[:, (p_max - p_opt):]
+	X_test  = X_full_test[:, (p_max - p_opt):]
+
+	# The number of nearest neighbors used to 
+	# estimate the LER.
+
+	n_neighbors = 1
+
+	# This is now redundant. Legacy from when 
+	# I was using k-nearest neighbor regression.
+
+	n_neighbors_max = n_neighbors
+
+	# Compute distances using the Euclidean norm.
+
+	Lp_norm = 2.
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Estimate h[X_{t-p}^{t}] using the Kozachenko-Leonenko estimator
+	# separately in the training and testing sets.
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	# Create structures for estimating the h[X_{t-p}^{t}] separately
+	# in both the training and test sets.
+
+	knn_for_ser = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ler = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+
+	# Find the nearest neighbors separately in the
+	# training and test sets.
+
+	knn_out_for_ser = knn_for_ser.fit(X_train)
+	knn_out_for_ler = knn_for_ler.fit(X_test)
+
+	# Extract the distances to nearest neighbors in the 
+	# training and test sets.
+
+	distances_for_ser, neighbor_inds_for_ser = knn_out_for_ser.kneighbors()
+	distances_for_ler, neighbor_inds_for_ler = knn_out_for_ler.kneighbors()
+
+	# The volume of a unit ball under the Lp-norm.
+
+	cd = numpy.power(2*gamma(1 + 1/Lp_norm), X_train.shape[1])/gamma(1 + X_train.shape[1]/Lp_norm)
+
+	h_joint_for_ser = X_train.shape[1] * numpy.log(distances_for_ser[:, n_neighbors-1]) + numpy.log(cd)
+	h_joint_for_ler = X_train.shape[1] * numpy.log(distances_for_ler[:, n_neighbors-1]) + numpy.log(cd)
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Compute the marginal entropy h[X_{t-p*}^{t-1}]
+	# using the Kozachenko-Leonenko kth-nearest
+	# neighbor estimator.
+	# 
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	Z_train = X_train[:, :-1]
+	Z_test = X_test[:, :-1]
+
+	knn_for_ser = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ler = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+
+	knn_out_for_ser = knn_for_ser.fit(Z_train)
+	knn_out_for_ler = knn_for_ler.fit(Z_test)
+
+	distances_for_ser, neighbor_inds_for_ser = knn_out_for_ser.kneighbors()
+	distances_for_ler, neighbor_inds_for_ler = knn_out_for_ler.kneighbors()
+
+	cd = numpy.power(2*gamma(1 + 1/Lp_norm), Z_train.shape[1])/gamma(1 + Z_train.shape[1]/Lp_norm)
+
+	h_marg_for_ser = Z_train.shape[1] * numpy.log(distances_for_ser[:, n_neighbors-1]) + numpy.log(cd)
+	h_marg_for_ler = Z_train.shape[1] * numpy.log(distances_for_ler[:, n_neighbors-1]) + numpy.log(cd)
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Estimate the local entropy rate as the difference
+	# between the joint and marginal entropies in both
+	# the training and test sets:
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	ler_for_ser = h_joint_for_ser - h_marg_for_ser
+	ler_for_ler = h_joint_for_ler - h_marg_for_ler
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Estimate the specific entropy rate by regressing
+	# the local entropy rate on the past via 
+	# k-nearest neighbors regression, recalling that
+	# 
+	# LER = -log f(X_{t} | X_{t-p}^{t-1})
+	# 
+	# and 
+	# 
+	# SER = E[-log f(X_{t} | X_{t-p}^{t-1}) | X_{t-p}^{t-1} = x_{t-p}^{t-1}]
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	# Use locfit, a local regression package in R,
+	# to estimate SER by smoothing the LER on the past.
+
+	from rpy2.robjects.packages import importr
+
+	import rpy2.robjects as robjects
+
+	locfit = importr('locfit')
+
+	r = robjects.r
+
+	r('''
+	        choose.nn.splithalf <- function(x.train, y.train, x.tune, y.tune, maxk = 1000) {
+				spars = c(seq(0.1, 1, by = 0.01), 1000)
+
+	            # spars = seq(0.5, 1, by = 0.01)
+	            # spars = seq(0.7, 1, by = 0.01)
+				err.by.spars = rep(0, length(spars))
+
+				for (spar.ind in 1:length(spars)){
+
+					compute.mse = function(x.train, y.train, x.tune, y.tune, spar){
+					tryCatch({
+					locfit.out = locfit.raw(x.train, y.train, alpha = spar, deg = 1, maxk = maxk)
+
+						pred.tune = predict(locfit.out, x.tune)
+
+						return(mean((pred.tune - y.tune)^2))
+					},
+					error = function(e){
+						return(NA)
+					})
+					}
+
+					err.by.spars[spar.ind] = compute.mse(x.train, y.train, x.tune, y.tune, spars[spar.ind])
+
+					# locfit.out = locfit.raw(x.train, y.train, alpha = spars[spar.ind], deg = 1, maxk = 1000)
+
+					# pred.tune = predict(locfit.out, x.tune)
+
+					# mse = mean((pred.tune - y.tune)^2)
+
+	  				# err.by.spars[spar.ind] = mse
+	  			}
+
+	  			arg.spar.min = which.min(err.by.spars)
+				spar.min = spars[arg.spar.min]
+
+				return(spar.min)
+	        }
+	        ''')
+
+	rlocfit = r['locfit.raw'] 
+
+	rpredict = r['predict']
+
+	import rpy2.robjects.numpy2ri
+	rpy2.robjects.numpy2ri.activate()
+
+	# Convert numpy arrays to R vectors / matrices.
+
+	nr, nc = X_train[:, :-1].shape
+
+	x_train = robjects.r.matrix(X_train[:, :-1], nrow = nr, ncol = nc)
+	y_train = robjects.FloatVector(ler_for_ser)
+
+	nr, nc = X_test[:, :-1].shape
+
+	x_tune = robjects.r.matrix(X_test[:, :-1], nrow = nr, ncol = nc)
+	y_tune = robjects.FloatVector(ler_for_ler)
+
+	# Choose alpha for locfit using split-half cross-validation.
+
+	r_f = robjects.globalenv['choose.nn.splithalf']
+	sp_use = r_f(x_train, y_train, x_tune, y_tune, maxk)[0]
+
+	# Compute the estimate of the SER at the training data.
+
+	locfit_out = rlocfit(x_train, y_train, alpha = sp_use, deg = 1, maxk = maxk)
+
+	ser_out = rpredict(locfit_out, x_train)
+
+	return sp_use, X_train[:, :-1], numpy.array(ser_out)
