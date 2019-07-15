@@ -1189,6 +1189,31 @@ def embed_ts_multihorizon(x, p_max, q, is_multirealization = False):
 
 	return X
 
+def embed_ts_multvar(x, p_max):
+	# 
+	# Let:
+	#	d be the dimension of the state space and
+	# 	T be the length of the realization.
+	# 
+	# Assume x is d x T
+	# 
+	# embed in 
+	# 
+	# 	X ~  d x (T - p_max) x (p_max + 1)
+	# 
+	# so that X[0, :, :] is the embedding matrix
+	# for the first state variable.
+
+	d = x.shape[0]
+	T = x.shape[1]
+
+	X = numpy.zeros((d, T - p_max, p_max + 1))
+
+	for lag in range(p_max + 1):
+		X[:, :, lag] = x[:, lag:(T - p_max + lag)]
+
+	return X
+
 def score_data(q, D, verbose = False):
 	"""
 	score_data computes the negative log-predictive
