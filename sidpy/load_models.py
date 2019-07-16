@@ -592,8 +592,10 @@ def load_model_data_io(model_name, N, ds_by = None, dim = None):
 		def G(x, t):
 			return B
 
-		# dyn_noise = 0
-		dyn_noise = 0.5
+		if 'slorenz' in model_name:
+			dyn_noise = 0.5
+		else:
+			dyn_noise = 0
 
 		B = numpy.diag([dyn_noise]*dim)
 
@@ -622,4 +624,7 @@ def load_model_data_io(model_name, N, ds_by = None, dim = None):
 		X = result[:, 1]
 
 
-	return Y, X, p_true, model_type
+	if 'all' in model_name:
+		return result.T, p_true, model_type
+	else:
+		return Y, X, p_true, model_type
