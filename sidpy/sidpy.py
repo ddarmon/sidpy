@@ -3427,7 +3427,7 @@ def choose_k_for_ser_estimation(x, p_opt):
 	err_by_ks = []
 
 	for k_ind, n_neighbors in enumerate(ks):
-		print 'Estimating SER (k* = {})...'.format(n_neighbors)
+		print('Estimating SER (k* = {})...'.format(n_neighbors))
 
 		ser = numpy.mean(ler_for_ser[neighbor_inds[:, :n_neighbors]], axis = 1)
 
@@ -3436,14 +3436,14 @@ def choose_k_for_ser_estimation(x, p_opt):
 
 		err_by_ks += [err_ser]
 
-		print 'Using k* = {} (s = {}), the MSE is {}...'.format(n_neighbors, ss[k_ind], err_ser)
+		print('Using k* = {} (s = {}), the MSE is {}...'.format(n_neighbors, ss[k_ind], err_ser))
 
 	arg_min_err = numpy.argmin(err_by_ks)
 
 	k_opt = ks[arg_min_err]
 	s_opt = ss[arg_min_err]
 
-	print 's* = {}, giving k* = {}...'.format(ss[arg_min_err], k_opt)
+	print('s* = {}, giving k* = {}...'.format(ss[arg_min_err], k_opt))
 
 	return k_opt, s_opt
 
