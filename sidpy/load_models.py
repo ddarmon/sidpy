@@ -585,7 +585,8 @@ def load_model_data_io(model_name, N, ds_by = None, dim = None):
 			dX = numpy.zeros(d)
 
 			for k in range(d):
-				dX[k] = (X[(k + 1) % d] - X[(k - 2) % d])*X[(k - 1) % d] - X[k] + 5
+				# dX[k] = (X[(k + 1) % d] - X[(k - 2) % d])*X[(k - 1) % d] - X[k] + 5
+				dX[k] = (X[(k + 1) % d] - X[(k - 2) % d])*X[(k - 1) % d] - X[k] + 8
 
 			return dX
 

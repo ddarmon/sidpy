@@ -3703,3 +3703,19 @@ def choose_k_for_ser_estimation_locfit(x, p_opt, maxk = 1000):
 	ser_out = rpredict(locfit_out, x_train)
 
 	return sp_use, X_train[:, :-1], numpy.array(ser_out)
+
+def plot_noise_versus_ts(x, noise, lag_max = 5):
+	num_plots = lag_max + 1
+
+	X = embed_ts(x, lag_max)
+	Noise = embed_ts(noise, lag_max)
+
+	square_side = int(numpy.ceil(numpy.sqrt(num_plots)))
+
+	fig, ax = plt.subplots(square_side, square_side, sharex = True, sharey = True)
+
+	for flat_index in range(lag_max + 1):
+		ax_inds = numpy.unravel_index(flat_index, (square_side, square_side))
+		ax[ax_inds].plot(X[:, -1 - flat_index], Noise[:, -1], '.')
+		ax[ax_inds].set_xlabel('$X_{{t - {}}}$'.format(flat_index))
+		ax[ax_inds].set_ylabel('$\\epsilon_{{t}}$'.format(flat_index))
