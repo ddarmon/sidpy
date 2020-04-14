@@ -449,6 +449,9 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 				h_memoryless = numpy.mean(lh_memoryless)
 
 				nlpl_by_qp[q_ind, p_ind] = h_memoryless
+
+				if output_verbose:
+					print('For (q = {}, p = {}) NLPL(k*) = {}'.format(q_use, p_use, h_memoryless))
 			else:
 				Y = Y_full[:, (r_max-q_use):-1]
 				X = X_full[:, (r_max-p_use):]
@@ -828,6 +831,8 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 			if p_use == 0 and q_use == 0:
 				mse_by_qp[q_ind, p_ind] = numpy.mean(numpy.power(x - numpy.mean(x), 2))
 				kstar_by_qp[q_ind, p_ind] = len(x)
+
+				print('For (q = {}, p = {}) with MSE(k*) = {}'.format(q_use, p_use, mse_by_qp[q_ind, p_ind]))
 			else:
 				Y = Y_full[:, (r_max-q_use):-1]
 				X = X_full[:, (r_max-p_use):]
@@ -3712,10 +3717,29 @@ def plot_noise_versus_ts(x, noise, lag_max = 5):
 
 	square_side = int(numpy.ceil(numpy.sqrt(num_plots)))
 
-	fig, ax = plt.subplots(square_side, square_side, sharex = True, sharey = True)
+	fig, ax = plt.subplots(square_side, square_side)
 
-	for flat_index in range(lag_max + 1):
+	ax[0, 0].plot(Noise[:, -2], Noise[:, -1], '.')
+	ax[0, 0].set_xlabel('$\\epsilon_{{t - 1}}$')
+	ax[0, 0].set_ylabel('$\\epsilon_{{t}}$')
+
+	for flat_index in range(1, lag_max + 1):
 		ax_inds = numpy.unravel_index(flat_index, (square_side, square_side))
 		ax[ax_inds].plot(X[:, -1 - flat_index], Noise[:, -1], '.')
 		ax[ax_inds].set_xlabel('$X_{{t - {}}}$'.format(flat_index))
-		ax[ax_inds].set_ylabel('$\\epsilon_{{t}}$'.format(flat_index))
+		ax[ax_inds].set_ylabel('$\\epsilon_{{t}}$')
+
+def plot_lagplot(x, lag_max = 5, state_label = 'X'):
+	num_plots = lag_max
+
+	X = embed_ts(x, lag_max)
+
+	square_side = int(numpy.ceil(numpy.sqrt(num_plots)))
+
+	fig, ax = plt.subplots(square_side, square_side)
+
+	for flat_index in range(0, lag_max):
+		ax_inds = numpy.unravel_index(flat_index, (square_side, square_side))
+		ax[ax_inds].plot(X[:, -2 - flat_index], X[:, -1], '.')
+		ax[ax_inds].set_xlabel('${}_{{t - {}}}$'.format(state_label, flat_index))
+		ax[ax_inds].set_ylabel('${}_{{t}}$'.format(state_label))
