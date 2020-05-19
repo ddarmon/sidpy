@@ -2248,7 +2248,7 @@ def estimate_ais(x, p, n_neighbors = 5, fix_vm = False):
 
 	miCalc.setObservations(sourceArray, destArray)
 
-	ais_estimate = miCalc.computeAverageLocalOfObservations()
+	ais_estimate = numpy.array(miCalc.computeAverageLocalOfObservations())
 
 	return ais_estimate
 
@@ -2319,7 +2319,7 @@ def estimate_mi(X, Y, n_neighbors = 5):
 
 	miCalc.setObservations(sourceArray, destArray)
 
-	mi_estimate = miCalc.computeAverageLocalOfObservations()
+	mi_estimate = numpy.array(miCalc.computeAverageLocalOfObservations())
 
 	return mi_estimate
 
@@ -2429,7 +2429,7 @@ def estimate_lte(y, x, q, p, delay, k = 5):
 
 	miCalc.finaliseAddObservations()
 
-	lTEs=miCalc.computeLocalOfPreviousObservations()[:]
+	lTEs=numpy.array(miCalc.computeLocalOfPreviousObservations()[:])
 	TE = numpy.nanmean(lTEs)
 
 	# Need to handle the case of single-realization and
@@ -2641,7 +2641,7 @@ def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
 
 		# print 'Computing local Transfer Entropies...'
 
-		lTEs=miCalc.computeLocalOfPreviousObservations()[:]
+		lTEs=numpy.array(miCalc.computeLocalOfPreviousObservations()[:])
 		TE = numpy.mean(lTEs)
 
 		TE_by_delay[delay_ind] = TE
