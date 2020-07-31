@@ -9,15 +9,9 @@ What is sidpy?
 Installation
 ------------
 
-To use sidpy, you need to install these 4 Python packages, which you can most easily install via the [Anaconda](https://www.anaconda.com/distribution/) distribution and pip:
-
-> conda install -c conda-forge nlopt
-
-> conda install -c conda-forge pyflann
-
-> conda install -c conda-forge jpype1
-
-> pip install sdeint
+```
+pip install git+https://github.com/ddarmon/sidpy
+```
 
 Using sidpy
 ------------
