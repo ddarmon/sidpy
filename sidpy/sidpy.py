@@ -141,7 +141,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 
 			distances_marg_train = numpy.sqrt(distances_marg_train) # Since FLANN returns the *squared* Euclidean distance.
 		elif nn_package == 'sklearn':
-			knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+			knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
 
 			knn_out = knn.fit(Z_train)
 
@@ -433,7 +433,7 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 					distances_marg_train = distances_marg_train[:, 1:]
 					distances_marg_train = numpy.sqrt(distances_marg_train) # Since FLANN returns the *squared* Euclidean distance.
 				elif nn_package == 'sklearn':
-					knn = neighbors.NearestNeighbors(n_for_marg, algorithm = 'kd_tree', p = Lp_norm)
+					knn = neighbors.NearestNeighbors(n_neighbors = n_for_marg, algorithm = 'kd_tree', p = Lp_norm)
 
 					knn_out = knn.fit(Z_train)
 
@@ -493,7 +493,7 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 
 					distances_marg_train = numpy.sqrt(distances_marg_train) # Since FLANN returns the *squared* Euclidean distance.
 				elif nn_package == 'sklearn':
-					knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+					knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
 
 					knn_out = knn.fit(Z_train)
 
@@ -687,7 +687,7 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn
 
 			distances_marg = numpy.sqrt(distances_marg) # Since FLANN returns the *squared* Euclidean distance.
 		elif nn_package == 'sklearn':
-			knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+			knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
 
 			knn_out = knn.fit(Z)
 
@@ -863,7 +863,7 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 
 					distances_marg = numpy.sqrt(distances_marg) # Since FLANN returns the *squared* Euclidean distance.
 				elif nn_package == 'sklearn':
-					knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+					knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
 
 					knn_out = knn.fit(Z_past)
 
@@ -1020,7 +1020,7 @@ def choose_model_order_joint_mse(y, x, q_max, p_max, pow_upperbound = 0.5, nn_pa
 
 					distances_marg = numpy.sqrt(distances_marg) # Since FLANN returns the *squared* Euclidean distance.
 				elif nn_package == 'sklearn':
-					knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+					knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
 
 					knn_out = knn.fit(Z_past)
 
@@ -1059,7 +1059,7 @@ def choose_model_order_joint_mse(y, x, q_max, p_max, pow_upperbound = 0.5, nn_pa
 def compute_nearest_neighbors_1d(X, n_neighbors, Lp_norm = 2):
 	Z = X
 
-	knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+	knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
 
 	knn_out = knn.fit(Z)
 
@@ -1070,7 +1070,7 @@ def compute_nearest_neighbors_1d(X, n_neighbors, Lp_norm = 2):
 def compute_nearest_neighbors(X, n_neighbors, Lp_norm = 2):
 	Z = X
 
-	knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+	knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
 
 	knn_out = knn.fit(Z)
 
@@ -1078,7 +1078,7 @@ def compute_nearest_neighbors(X, n_neighbors, Lp_norm = 2):
 
 	Z = X[:, :-1]
 
-	knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+	knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
 
 	knn_out = knn.fit(Z)
 
@@ -1087,7 +1087,7 @@ def compute_nearest_neighbors(X, n_neighbors, Lp_norm = 2):
 	return distances_marg, distances_joint, nn_inds_marg, nn_inds_joint
 
 def compute_nearest_neighbors_cross(Xfit, Xeval, n_neighbors, Lp_norm = 2):
-	knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+	knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
 
 	knn_out = knn.fit(Xfit)
 
@@ -3357,8 +3357,8 @@ def choose_k_for_ser_estimation(x, p_opt):
 
 	Lp_norm = 2.
 
-	knn_for_ser = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
-	knn_for_ler = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ser = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ler = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
 
 	knn_out_for_ser = knn_for_ser.fit(X_train)
 	knn_out_for_ler = knn_for_ler.fit(X_test)
@@ -3383,8 +3383,8 @@ def choose_k_for_ser_estimation(x, p_opt):
 	Z_train = X_train[:, :-1]
 	Z_test = X_test[:, :-1]
 
-	knn_for_ser = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
-	knn_for_ler = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ser = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ler = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
 
 	knn_out_for_ser = knn_for_ser.fit(Z_train)
 	knn_out_for_ler = knn_for_ler.fit(Z_test)
@@ -3553,8 +3553,8 @@ def choose_k_for_ser_estimation_locfit(x, p_opt, maxk = 1000):
 	# Create structures for estimating the h[X_{t-p}^{t}] separately
 	# in both the training and test sets.
 
-	knn_for_ser = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
-	knn_for_ler = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ser = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ler = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
 
 	# Find the nearest neighbors separately in the
 	# training and test sets.
@@ -3586,8 +3586,8 @@ def choose_k_for_ser_estimation_locfit(x, p_opt, maxk = 1000):
 	Z_train = X_train[:, :-1]
 	Z_test = X_test[:, :-1]
 
-	knn_for_ser = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
-	knn_for_ler = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ser = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ler = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
 
 	knn_out_for_ser = knn_for_ser.fit(Z_train)
 	knn_out_for_ler = knn_for_ler.fit(Z_test)
