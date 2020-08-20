@@ -3840,7 +3840,7 @@ def remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors
 	distances_marg_masked = numpy.zeros((distances_marg.shape[0], n_neighbors), dtype = numpy.int32)
 	neighbor_inds_masked = numpy.zeros((distances_marg.shape[0], n_neighbors), dtype = numpy.int32)
 
-	for t in range(X.shape[0]):
+	for t in range(distances_marg.shape[0]):
 		mask = mask_temporal_neighbors[t, :]
 
 		distances_marg_masked[t, :] = distances_marg[t, mask][:n_neighbors]
