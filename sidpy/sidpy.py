@@ -161,7 +161,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, temporal_blind = Non
 			assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
 
 		if temporal_blind is not None:
-			distances_marg, neighbor_inds = remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors, temporal_blind)
+			distances_marg_train, neighbor_inds_train = remove_temporal_nearest_neighbors(distances_marg_train, neighbor_inds_train, n_neighbors, temporal_blind)
 
 		if p_use == 1:
 			if marginal_estimation_procedure == 'knn':
@@ -527,7 +527,7 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 					assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
 				
 				if temporal_blind is not None:
-					distances_marg, neighbor_inds = remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors, temporal_blind)
+					distances_marg_train, neighbor_inds_train = remove_temporal_nearest_neighbors(distances_marg_train, neighbor_inds_train, n_neighbors, temporal_blind)
 				
 				if announce_stages:
 					print('Done computing nearest neighbor distances...')
