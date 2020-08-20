@@ -483,11 +483,11 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 				X_train = Z
 
 				n_neighbors = int(numpy.ceil(numpy.power(X_train.shape[0] - 1, pow_upperbound)))
-                
-                if temporal_blind is None:
-        			n_neighbors_with_mask = n_neighbors
-        		else:
-        			n_neighbors_with_mask = n_neighbors + 2*temporal_blind
+				
+				if temporal_blind is None:
+					n_neighbors_with_mask = n_neighbors
+				else:
+					n_neighbors_with_mask = n_neighbors + 2*temporal_blind
 
 				n_neighbors_upperbound = n_neighbors
 
@@ -525,10 +525,10 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 					distances_marg_train, neighbor_inds_train = knn_out.kneighbors()
 				else:
 					assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
-                
-                if temporal_blind is not None:
-        			distances_marg, neighbor_inds = remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors, temporal_blind)
-                
+				
+				if temporal_blind is not None:
+					distances_marg, neighbor_inds = remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors, temporal_blind)
+				
 				if announce_stages:
 					print('Done computing nearest neighbor distances...')
 
@@ -700,8 +700,8 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, temporal_blind = None
 		X = X_full[:, (p_max - p_use):]
 
 		n_neighbors = int(numpy.ceil(numpy.power(X.shape[0] - 1, pow_upperbound)))
-        
-        if temporal_blind is None:
+		
+		if temporal_blind is None:
 			n_neighbors_with_mask = n_neighbors
 		else:
 			n_neighbors_with_mask = n_neighbors + 2*temporal_blind
@@ -734,7 +734,7 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, temporal_blind = None
 		else:
 			assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
 
-        if temporal_blind is not None:
+		if temporal_blind is not None:
 			distances_marg, neighbor_inds = remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors, temporal_blind)
 
 		if announce_stages:
@@ -890,11 +890,11 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 				Z = numpy.concatenate((Y, X), axis = 1)
 
 				n_neighbors = int(numpy.ceil(numpy.power(Z.shape[0] - 1, pow_upperbound)))
-                
-        		if temporal_blind is None:
-        			n_neighbors_with_mask = n_neighbors
-        		else:
-        			n_neighbors_with_mask = n_neighbors + 2*temporal_blind
+				
+				if temporal_blind is None:
+					n_neighbors_with_mask = n_neighbors
+				else:
+					n_neighbors_with_mask = n_neighbors + 2*temporal_blind
 
 				n_neighbors_upperbound = n_neighbors
 
@@ -924,8 +924,8 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 				else:
 					assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
 
-                if temporal_blind is not None:
-                    distances_marg, neighbor_inds = remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors, temporal_blind)
+				if temporal_blind is not None:
+					distances_marg, neighbor_inds = remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors, temporal_blind)
 
 				if announce_stages:
 					print('Done computing nearest neighbor distances...')
@@ -2063,7 +2063,7 @@ def estimate_normalized_qstep_outsample(x_train, x_test, log_dist_ratio_train, p
 
 	X_0_test = embed_ts_multihorizon(x_test, p_opt, 0)
 
-	X_0      = X_0[:-q, :]
+	X_0	  = X_0[:-q, :]
 
 	n_neighbors_for_den = 5
 
@@ -3693,11 +3693,11 @@ def choose_k_for_ser_estimation_locfit(x, p_opt, maxk = 1000):
 	r = robjects.r
 
 	r('''
-	        choose.nn.splithalf <- function(x.train, y.train, x.tune, y.tune, maxk = 1000) {
+			choose.nn.splithalf <- function(x.train, y.train, x.tune, y.tune, maxk = 1000) {
 				spars = c(seq(0.1, 1, by = 0.01), 1000)
 
-	            # spars = seq(0.5, 1, by = 0.01)
-	            # spars = seq(0.7, 1, by = 0.01)
+				# spars = seq(0.5, 1, by = 0.01)
+				# spars = seq(0.7, 1, by = 0.01)
 				err.by.spars = rep(0, length(spars))
 
 				for (spar.ind in 1:length(spars)){
@@ -3730,8 +3730,8 @@ def choose_k_for_ser_estimation_locfit(x, p_opt, maxk = 1000):
 				spar.min = spars[arg.spar.min]
 
 				return(spar.min)
-	        }
-	        ''')
+			}
+			''')
 
 	rlocfit = r['locfit.raw'] 
 
