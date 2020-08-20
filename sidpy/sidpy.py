@@ -121,7 +121,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, temporal_blind = Non
 		if temporal_blind is None:
 			n_neighbors_with_mask = n_neighbors
 		else:
-			n_neighbors_with_mask = n_neighbors + 2*temporal_blind
+			n_neighbors_with_mask = numpy.min([n_neighbors + 2*temporal_blind, X.shape[0] - 1])
 
 		n_neighbors_upperbound = n_neighbors
 
@@ -141,7 +141,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, temporal_blind = Non
 		if nn_package == 'pyflann':
 			flann = pyflann.FLANN()
 
-			neighbor_inds_train, distances_marg_train = flann.nn(Z_train,Z_train,n_neighbors + 1);
+			neighbor_inds_train, distances_marg_train = flann.nn(Z_train,Z_train,n_neighbors_with_mask + 1);
 
 			neighbor_inds_train = neighbor_inds_train[:, 1:]
 			# Prior to 141217, this was:
@@ -152,7 +152,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, temporal_blind = Non
 
 			distances_marg_train = numpy.sqrt(distances_marg_train) # Since FLANN returns the *squared* Euclidean distance.
 		elif nn_package == 'sklearn':
-			knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+			knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors_with_mask, algorithm = 'kd_tree', p = Lp_norm)
 
 			knn_out = knn.fit(Z_train)
 
@@ -487,7 +487,7 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 				if temporal_blind is None:
 					n_neighbors_with_mask = n_neighbors
 				else:
-					n_neighbors_with_mask = n_neighbors + 2*temporal_blind
+					n_neighbors_with_mask = numpy.min([n_neighbors + 2*temporal_blind, X.shape[0] - 1])
 
 				n_neighbors_upperbound = n_neighbors
 
@@ -507,7 +507,7 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 				if nn_package == 'pyflann':
 					flann = pyflann.FLANN()
 
-					neighbor_inds_train, distances_marg_train = flann.nn(Z_train,Z_train,n_neighbors + 1);
+					neighbor_inds_train, distances_marg_train = flann.nn(Z_train,Z_train,n_neighbors_with_mask + 1);
 
 					neighbor_inds_train = neighbor_inds_train[:, 1:]
 					# Prior to 141217, this was:
@@ -518,7 +518,7 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 
 					distances_marg_train = numpy.sqrt(distances_marg_train) # Since FLANN returns the *squared* Euclidean distance.
 				elif nn_package == 'sklearn':
-					knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+					knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors_with_mask, algorithm = 'kd_tree', p = Lp_norm)
 
 					knn_out = knn.fit(Z_train)
 
@@ -704,7 +704,7 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, temporal_blind = None
 		if temporal_blind is None:
 			n_neighbors_with_mask = n_neighbors
 		else:
-			n_neighbors_with_mask = n_neighbors + 2*temporal_blind
+			n_neighbors_with_mask = numpy.min([n_neighbors + 2*temporal_blind, X.shape[0] - 1])
 
 		n_neighbors_upperbound = n_neighbors
 
@@ -719,14 +719,14 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, temporal_blind = None
 		if nn_package == 'pyflann':
 			flann = pyflann.FLANN()
 
-			neighbor_inds, distances_marg = flann.nn(Z,Z,n_neighbors + 1);
+			neighbor_inds, distances_marg = flann.nn(Z,Z,n_neighbors_with_mask + 1);
 
 			neighbor_inds = neighbor_inds[:, 1:]
 			distances_marg = distances_marg[:, 1:]
 
 			distances_marg = numpy.sqrt(distances_marg) # Since FLANN returns the *squared* Euclidean distance.
 		elif nn_package == 'sklearn':
-			knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+			knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors_with_mask, algorithm = 'kd_tree', p = Lp_norm)
 
 			knn_out = knn.fit(Z)
 
@@ -894,7 +894,7 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 				if temporal_blind is None:
 					n_neighbors_with_mask = n_neighbors
 				else:
-					n_neighbors_with_mask = n_neighbors + 2*temporal_blind
+					n_neighbors_with_mask = numpy.min([n_neighbors + 2*temporal_blind, X.shape[0] - 1])
 
 				n_neighbors_upperbound = n_neighbors
 
@@ -909,14 +909,14 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 				if nn_package == 'pyflann':
 					flann = pyflann.FLANN()
 
-					neighbor_inds, distances_marg = flann.nn(Z_past,Z_past,n_neighbors + 1);
+					neighbor_inds, distances_marg = flann.nn(Z_past,Z_past,n_neighbors_with_mask + 1);
 
 					neighbor_inds = neighbor_inds[:, 1:]
 					distances_marg = distances_marg[:, 1:]
 
 					distances_marg = numpy.sqrt(distances_marg) # Since FLANN returns the *squared* Euclidean distance.
 				elif nn_package == 'sklearn':
-					knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+					knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors_with_mask, algorithm = 'kd_tree', p = Lp_norm)
 
 					knn_out = knn.fit(Z_past)
 
