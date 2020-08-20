@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 gamma = scipy.special.gamma
 digamma = scipy.special.digamma
 
-def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_procedure = 'knn', nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True, suppress_warning = False):
+def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, temporal_blind = None, marginal_estimation_procedure = 'knn', nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True, suppress_warning = False):
 	"""
 	choose_model_order_nlpl computes the negative log-predictive likelihood (NLPL)
 	of the  data for varying model orders via a kernel nearest neighbor estimator
@@ -32,6 +32,12 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 			A number in [0, 1] that determines the upper bound
 			on the number of nearest neighbors to consider 
 			for the kernel nearest neighbor estimator.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, a only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
 	marginal_estimation_procedure : string
 			The estimation procedure used to estimate the 
 			differential entropy of x. One of {'knn', 'kde'},
@@ -112,6 +118,11 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 
 		n_neighbors = int(numpy.ceil(numpy.power(X_train.shape[0] - 1, pow_upperbound)))
 
+		if temporal_blind is None:
+			n_neighbors_with_mask = n_neighbors
+		else:
+			n_neighbors_with_mask = n_neighbors + 2*temporal_blind
+
 		n_neighbors_upperbound = n_neighbors
 
 		Z_train = X_train
@@ -148,6 +159,9 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 			distances_marg_train, neighbor_inds_train = knn_out.kneighbors()
 		else:
 			assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
+
+		if temporal_blind is not None:
+			distances_marg, neighbor_inds = remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors, temporal_blind)
 
 		if p_use == 1:
 			if marginal_estimation_procedure == 'knn':
@@ -309,7 +323,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 
 	return p_opt, nlpl_opt, nlpl_by_p, er_knn, ler_knn
 
-def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_upperbound = 0.5, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
+def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_upperbound = 0.5, temporal_blind = None, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
 	"""
 	choose_model_order_io_nlpl computes the negative log-predictive 
 	likelihood (NLPL) of a k-nearest neighbor predictor for the output of 
@@ -339,6 +353,12 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 			A number in [0, 1] that determines the upper bound
 			on the number of nearest neighbors to consider 
 			for the k-nearest neighbor estimator.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, a only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
 	nn_package : string
 			The package used to compute the nearest neighbors,
 			one of {'sklearn', 'pyflann'}. sklearn is an exact
@@ -463,6 +483,11 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 				X_train = Z
 
 				n_neighbors = int(numpy.ceil(numpy.power(X_train.shape[0] - 1, pow_upperbound)))
+                
+                if temporal_blind is None:
+        			n_neighbors_with_mask = n_neighbors
+        		else:
+        			n_neighbors_with_mask = n_neighbors + 2*temporal_blind
 
 				n_neighbors_upperbound = n_neighbors
 
@@ -500,7 +525,10 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 					distances_marg_train, neighbor_inds_train = knn_out.kneighbors()
 				else:
 					assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
-
+                
+                if temporal_blind is not None:
+        			distances_marg, neighbor_inds = remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors, temporal_blind)
+                
 				if announce_stages:
 					print('Done computing nearest neighbor distances...')
 
@@ -587,7 +615,7 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 
 	return qs[q_opt_ind], ps[p_opt_ind], nlpl_opt, nlpl_by_qp
 
-def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
+def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, temporal_blind = None, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
 	"""
 	choose_model_order_mse computes the mean-squared error (MSE) of a k-nearest 
 	neighbor predictor for the data for varying model orders, and returns the 
@@ -604,6 +632,12 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn
 			A number in [0, 1] that determines the upper bound
 			on the number of nearest neighbors to consider 
 			for the k-nearest neighbor estimator.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, a only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
 	nn_package : string
 			The package used to compute the nearest neighbors,
 			one of {'sklearn', 'pyflann'}. sklearn is an exact
@@ -666,6 +700,11 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn
 		X = X_full[:, (p_max - p_use):]
 
 		n_neighbors = int(numpy.ceil(numpy.power(X.shape[0] - 1, pow_upperbound)))
+        
+        if temporal_blind is None:
+			n_neighbors_with_mask = n_neighbors
+		else:
+			n_neighbors_with_mask = n_neighbors + 2*temporal_blind
 
 		n_neighbors_upperbound = n_neighbors
 
@@ -695,6 +734,9 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn
 		else:
 			assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
 
+        if temporal_blind is not None:
+			distances_marg, neighbor_inds = remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors, temporal_blind)
+
 		if announce_stages:
 			print('Done computing nearest neighbor distances...')
 
@@ -723,7 +765,7 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn
 
 	return p_opt, mse_opt, mse_by_p, kstar_by_p
 
-def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upperbound = 0.5, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
+def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upperbound = 0.5, temporal_blind = None, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
 	"""
 	choose_model_order_io_mse computes the mean-squared error (MSE) of a
 	k-nearest neighbor predictor for the output of the input-output
@@ -752,6 +794,12 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 			A number in [0, 1] that determines the upper bound
 			on the number of nearest neighbors to consider 
 			for the k-nearest neighbor estimator.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, a only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
 	nn_package : string
 			The package used to compute the nearest neighbors,
 			one of {'sklearn', 'pyflann'}. sklearn is an exact
@@ -842,6 +890,11 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 				Z = numpy.concatenate((Y, X), axis = 1)
 
 				n_neighbors = int(numpy.ceil(numpy.power(Z.shape[0] - 1, pow_upperbound)))
+                
+        		if temporal_blind is None:
+        			n_neighbors_with_mask = n_neighbors
+        		else:
+        			n_neighbors_with_mask = n_neighbors + 2*temporal_blind
 
 				n_neighbors_upperbound = n_neighbors
 
@@ -870,6 +923,9 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 					distances_marg, neighbor_inds = knn_out.kneighbors()
 				else:
 					assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
+
+                if temporal_blind is not None:
+                    distances_marg, neighbor_inds = remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors, temporal_blind)
 
 				if announce_stages:
 					print('Done computing nearest neighbor distances...')
@@ -3743,3 +3799,51 @@ def plot_lagplot(x, lag_max = 5, state_label = 'X'):
 		ax[ax_inds].plot(X[:, -2 - flat_index], X[:, -1], '.')
 		ax[ax_inds].set_xlabel('${}_{{t - {}}}$'.format(state_label, flat_index))
 		ax[ax_inds].set_ylabel('${}_{{t}}$'.format(state_label))
+
+def remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors, half_blind_size):
+	"""
+	remove_temporal_nearest_neighbors returns distances_marg and neighbor_inds
+	with temporal neighbors closer in time than half_blind_size removed.
+
+	This incorporates a "temporal blind", a la Theiler window, for highly
+	autocorrelated signals.
+
+	Parameters
+	----------
+	distances_marg : numpy.array
+			An array of nearest neighbor distances.
+	neighbor_inds : numpy.array
+			An array of nearest neighbor indices.
+	n_neighbors : int
+			The desired number of nearest neighbors after
+			accounting for the temporal blind.
+	half_blind_size : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, a only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
+
+	Returns
+	-------
+	distances_marg_masked : numpy.array
+			The nearest neighbor distances after
+			accounting for the temporal blind.
+	neighbor_inds_masked : numpy.array
+			The nearest neighbor indices after
+			accounting for the temporal blind.
+
+	"""
+
+	mask_temporal_neighbors = numpy.abs(neighbor_inds - numpy.arange(distances_marg.shape[0])[:, numpy.newaxis]) > half_blind_size
+
+	distances_marg_masked = numpy.zeros((distances_marg.shape[0], n_neighbors), dtype = numpy.int32)
+	neighbor_inds_masked = numpy.zeros((distances_marg.shape[0], n_neighbors), dtype = numpy.int32)
+
+	for t in range(X.shape[0]):
+		mask = mask_temporal_neighbors[t, :]
+
+		distances_marg_masked[t, :] = distances_marg[t, mask][:n_neighbors]
+		neighbor_inds_masked[t, :] = neighbor_inds[t, mask][:n_neighbors]
+
+	return distances_marg_masked, neighbor_inds_masked
