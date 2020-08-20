@@ -3837,7 +3837,7 @@ def remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors
 
 	mask_temporal_neighbors = numpy.abs(neighbor_inds - numpy.arange(distances_marg.shape[0])[:, numpy.newaxis]) > half_blind_size
 
-	distances_marg_masked = numpy.zeros((distances_marg.shape[0], n_neighbors), dtype = numpy.int32)
+	distances_marg_masked = numpy.zeros((distances_marg.shape[0], n_neighbors), dtype = numpy.float64)
 	neighbor_inds_masked = numpy.zeros((distances_marg.shape[0], n_neighbors), dtype = numpy.int32)
 
 	for t in range(distances_marg.shape[0]):
