@@ -2274,10 +2274,10 @@ def estimate_ais(x, p, n_neighbors = 5, fix_vm = False):
 
 	if not isJVMStarted():
 		if fix_vm:
-			startJVM(getDefaultJVMPath(), "-ea", "-Xms10m",  "-Xmx100m", "-Xss100m", "-Djava.class.path=" + jarLocation)
+			startJVM(getDefaultJVMPath(), "-ea", "-Xms10m",  "-Xmx100m", "-Xss100m", "-Djava.class.path=" + jarLocation, convertStrings = False)
 			# startJVM(getDefaultJVMPath(), "-ea", "-Xms15G", "-Xmx30G", "-Djava.class.path=" + jarLocation)
 		else:
-			startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
+			startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation, convertStrings = False)
 
 	implementingClass = "infodynamics.measures.continuous.kraskov.MutualInfoCalculatorMultiVariateKraskov2"
 	indexOfLastDot = str.rfind(implementingClass, ".")
@@ -2350,7 +2350,7 @@ def estimate_mi(X, Y, n_neighbors = 5):
 	jarLocation = '../jidt/infodynamics.jar'
 
 	if not isJVMStarted():
-		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
+		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation, convertStrings = False)
 
 	implementingClass = "infodynamics.measures.continuous.kraskov.MutualInfoCalculatorMultiVariateKraskov2"
 	indexOfLastDot = str.rfind(implementingClass, ".")
@@ -2449,7 +2449,7 @@ def estimate_lte(y, x, q, p, delay, k = 5):
 	jarLocation = "../jidt/infodynamics.jar"
 
 	if not isJVMStarted():
-		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
+		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation, convertStrings = False)
 
 	implementingClass = "infodynamics.measures.continuous.kraskov.TransferEntropyCalculatorKraskov"
 	indexOfLastDot = str.rfind(implementingClass, ".")
@@ -2657,7 +2657,7 @@ def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
 	jarLocation = "../jidt/infodynamics.jar"
 
 	if not isJVMStarted():
-		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
+		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation, convertStrings = False)
 
 	implementingClass = "infodynamics.measures.continuous.kraskov.TransferEntropyCalculatorKraskov"
 	indexOfLastDot = str.rfind(implementingClass, ".")
