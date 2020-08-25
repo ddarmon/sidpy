@@ -3847,3 +3847,77 @@ def remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors
 		neighbor_inds_masked[t, :] = neighbor_inds[t, mask][:n_neighbors]
 
 	return distances_marg_masked, neighbor_inds_masked
+
+def compute_ami_and_acf(x, num_lags, n_neighbors = 5, temporal_blind = 0, is_multirealization = False, plot = False, fix_vm = False):
+	jarLocation = '../jidt/infodynamics.jar'
+
+	if not isJVMStarted():
+		if fix_vm:
+			startJVM(getDefaultJVMPath(), "-ea", "-Xms10m",  "-Xmx100m", "-Xss100m", "-Djava.class.path=" + jarLocation, convertStrings = False)
+			# startJVM(getDefaultJVMPath(), "-ea", "-Xms15G", "-Xmx30G", "-Djava.class.path=" + jarLocation)
+		else:
+			startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation, convertStrings = False)
+
+	implementingClass = "infodynamics.measures.continuous.kraskov.MutualInfoCalculatorMultiVariateKraskov2"
+	indexOfLastDot = str.rfind(implementingClass, ".")
+	implementingPackage = implementingClass[:indexOfLastDot]
+	implementingBaseName = implementingClass[indexOfLastDot+1:]
+
+	mi_by_lag = numpy.zeros(num_lags)
+	acf_by_lag = numpy.zeros(num_lags)
+
+	x = x - numpy.mean(x)
+
+	lags = numpy.arange(1, num_lags + 1)
+
+	for p_max in lags:
+		X = sidpy.embed_ts(x, p_max = p_max, is_multirealization = True)
+
+		miCalcClass = eval('JPackage(\'%s\').%s' % (implementingPackage, implementingBaseName))
+		miCalc = miCalcClass()
+
+		# Turn off the (artificial) addition of 
+		# observational noise:
+
+		miCalc.setProperty("NOISE_LEVEL_TO_ADD", "0")
+
+		# Set the nearest neighbor parameter:
+
+		n_neighbors = 5
+
+		miCalc.setProperty("k", "{}".format(n_neighbors))
+
+		# Set Theiler window:
+
+		miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
+
+		sourceArray = X[:, -1]
+		destArray = X[:, -(p_max + 1)]
+
+		miCalc.initialise(1, 1)
+
+		miCalc.setObservations(sourceArray, destArray)
+
+		ais_estimate = numpy.array(miCalc.computeAverageLocalOfObservations())
+
+		acf_estimate = numpy.mean(X[:, -1]*X[:, -(p_max + 1)])/numpy.var(X[:, -1])
+
+		mi_by_lag[p_max - 1] = ais_estimate
+
+		acf_by_lag[p_max - 1] = acf_estimate
+
+	if plot:
+		fig, ax = plt.subplots(2, 1, sharex = True)
+
+		ax[0].plot(lags, mi_by_lag)
+		ax[1].plot(lags, acf_by_lag)
+		ax[0].set_ylabel('AMI')
+		ax[1].set_ylabel('ACF')
+		ax[1].set_xlabel('Lag')
+		ax[0].set_ylim([-0.2, numpy.max(mi_by_lag)*1.2])
+		ax[0].axhline(0, color = 'black', linestyle = ':')
+		ax[1].set_ylim([-1, 1])
+		ax[1].axhline(1/numpy.exp(1), linestyle = ':')
+		ax[1].axhline(0, color = 'black', linestyle = ':')
+
+	return {"lags" : lags, "ami" : mi_by_lag, "acf" : acf_by_lag}
