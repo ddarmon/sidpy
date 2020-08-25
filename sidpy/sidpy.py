@@ -3871,7 +3871,7 @@ def compute_ami_and_acf(x, num_lags, n_neighbors = 5, temporal_blind = 0, is_mul
 	lags = numpy.arange(1, num_lags + 1)
 
 	for p_max in lags:
-		X = sidpy.embed_ts(x, p_max = p_max, is_multirealization = True)
+		X = embed_ts(x, p_max = p_max, is_multirealization = True)
 
 		miCalcClass = eval('JPackage(\'%s\').%s' % (implementingPackage, implementingBaseName))
 		miCalc = miCalcClass()
@@ -3882,8 +3882,6 @@ def compute_ami_and_acf(x, num_lags, n_neighbors = 5, temporal_blind = 0, is_mul
 		miCalc.setProperty("NOISE_LEVEL_TO_ADD", "0")
 
 		# Set the nearest neighbor parameter:
-
-		n_neighbors = 5
 
 		miCalc.setProperty("k", "{}".format(n_neighbors))
 
