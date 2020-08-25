@@ -35,7 +35,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, temporal_blind = Non
 	temporal_blind : int
 			Half of the temporal blind used in finding nearest
 			neighbors. If None, no temporal temporal blind is
-			used. Otherwise, a only neighbors with indices
+			used. Otherwise, only neighbors with indices
 			> temporal_blind will be considered as candidates
 			for being nearest neighbors.
 	marginal_estimation_procedure : string
@@ -356,7 +356,7 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 	temporal_blind : int
 			Half of the temporal blind used in finding nearest
 			neighbors. If None, no temporal temporal blind is
-			used. Otherwise, a only neighbors with indices
+			used. Otherwise, only neighbors with indices
 			> temporal_blind will be considered as candidates
 			for being nearest neighbors.
 	nn_package : string
@@ -635,7 +635,7 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, temporal_blind = None
 	temporal_blind : int
 			Half of the temporal blind used in finding nearest
 			neighbors. If None, no temporal temporal blind is
-			used. Otherwise, a only neighbors with indices
+			used. Otherwise, only neighbors with indices
 			> temporal_blind will be considered as candidates
 			for being nearest neighbors.
 	nn_package : string
@@ -797,7 +797,7 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 	temporal_blind : int
 			Half of the temporal blind used in finding nearest
 			neighbors. If None, no temporal temporal blind is
-			used. Otherwise, a only neighbors with indices
+			used. Otherwise, only neighbors with indices
 			> temporal_blind will be considered as candidates
 			for being nearest neighbors.
 	nn_package : string
@@ -3820,7 +3820,7 @@ def remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors
 	half_blind_size : int
 			Half of the temporal blind used in finding nearest
 			neighbors. If None, no temporal temporal blind is
-			used. Otherwise, a only neighbors with indices
+			used. Otherwise, only neighbors with indices
 			> temporal_blind will be considered as candidates
 			for being nearest neighbors.
 
@@ -3848,7 +3848,51 @@ def remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors
 
 	return distances_marg_masked, neighbor_inds_masked
 
-def compute_ami_and_acf(x, num_lags, n_neighbors = 5, temporal_blind = 0, is_multirealization = False, plot = False, fix_vm = False):
+def estimate_ami_and_acf(x, num_lags, n_neighbors = 5, temporal_blind = None, is_multirealization = False, plot = False, fix_vm = False):
+	"""
+	estimate_ami_and_acf estimates the auto-mutual information (ami) and
+	autocorrelation funciton (acf) of the time series stored in x up
+	to num_lags.
+
+	Parameters
+	----------
+	x : list or numpy.array
+			The time series as a list (if is_multirealization == False)
+			or a numpy.array (if is_multirealization == True).
+	num_lags : int
+			The maximum number of lags to estimate ami and
+			acf up to.
+	n_neighbors : int
+			The number of neighbors to use in the KSG estimator
+			for mutual information.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
+	is_multirealization : boolean
+			Is the time series x given as 
+			a single long time series, or in a 
+			realization-by-realization format 
+			where each row corresponds to a single
+			realization?
+	plot : boolean
+			Whether or not to plot the AMI and ACF.
+	fix_vm : boolean
+			Whether to allocate more memory to the JVM
+			used by JIDT.
+
+	Returns
+	-------
+	lags : numpy.array
+			The lags at which AMI and ACF were estimated.
+	ami : numpy.array
+			The estimated AMI at each lag.
+	acf : numpy.array
+			The estimated ACF at each lag.
+	"""
+
 	jarLocation = '../jidt/infodynamics.jar'
 
 	if not isJVMStarted():
@@ -3887,7 +3931,8 @@ def compute_ami_and_acf(x, num_lags, n_neighbors = 5, temporal_blind = 0, is_mul
 
 		# Set Theiler window:
 
-		miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
+		if temporal_blind is not None:
+			miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
 
 		sourceArray = X[:, -1]
 		destArray = X[:, -(p_max + 1)]
