@@ -2226,7 +2226,7 @@ def smooth(x,window_len=11,window='hanning'):
 	y=numpy.convolve(w/w.sum(),s,mode='valid')
 	return y
 
-def estimate_ais(x, p, n_neighbors = 5, fix_vm = False):
+def estimate_ais(x, p, n_neighbors = 5, temporal_blind = None, fix_vm = False):
 	"""
 	Estimate the active information storage between the future and
 	a past of length p_opt,
@@ -2246,6 +2246,12 @@ def estimate_ais(x, p, n_neighbors = 5, fix_vm = False):
 	k : int
 			The number of nearest neighbors to use in estimating
 			the local transfer entropy.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
 
 	Returns
 	-------
@@ -2295,6 +2301,11 @@ def estimate_ais(x, p, n_neighbors = 5, fix_vm = False):
 
 	miCalc.setProperty("k", "{}".format(n_neighbors))
 
+	# Set Theiler window:
+
+	if temporal_blind is not None:
+		miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
+
 	X_ais = embed_ts(x, p_max = p)
 
 	sourceArray = X_ais[:, :-1]
@@ -2308,7 +2319,7 @@ def estimate_ais(x, p, n_neighbors = 5, fix_vm = False):
 
 	return ais_estimate
 
-def estimate_mi(X, Y, n_neighbors = 5):
+def estimate_mi(X, Y, n_neighbors = 5, temporal_blind = None):
 	"""
 	Estimate the mutual information between X and Y, using the 
 	Java Information Dynamics Toolbox (JIDT) implementation of
@@ -2323,6 +2334,12 @@ def estimate_mi(X, Y, n_neighbors = 5):
 	n_neighbors : int
 			The number of nearest neighbors to use in estimating
 			the local transfer entropy.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
 
 	Returns
 	-------
@@ -2368,6 +2385,11 @@ def estimate_mi(X, Y, n_neighbors = 5):
 
 	miCalc.setProperty("k", "{}".format(n_neighbors))
 
+	# Set Theiler window:
+
+	if temporal_blind is not None:
+		miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
+
 	sourceArray = X.reshape(-1, 1)
 	destArray = Y.reshape(-1, 1)
 
@@ -2379,7 +2401,7 @@ def estimate_mi(X, Y, n_neighbors = 5):
 
 	return mi_estimate
 
-def estimate_lte(y, x, q, p, delay, k = 5):
+def estimate_lte(y, x, q, p, delay, k = 5, temporal_blind = None):
 	#tmp_lte, tmp_tte = estimate_lte(y, x, q_IO, p_O, delay = 0, k = 5)
 	"""
 	Estimate the local transfer entropy from y to x with autoregressive
@@ -2413,6 +2435,12 @@ def estimate_lte(y, x, q, p, delay, k = 5):
 	k : int
 			The number of nearest neighbors to use in estimating
 			the local transfer entropy.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
 
 	Returns
 	-------
@@ -2475,6 +2503,11 @@ def estimate_lte(y, x, q, p, delay, k = 5):
 
 	miCalc.setProperty(miCalcClass.DELAY_PROP_NAME, "{}".format(delay+1))
 	miCalc.setProperty("k", "{}".format(k))
+
+	# Set Theiler window:
+
+	if temporal_blind is not None:
+		miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
 
 	miCalc.initialise()
 
@@ -2591,7 +2624,7 @@ def estimate_lte_iopo(y, x, q, p_io, p_o, delay, k = 5):
 
 	return lTEs, TE
 
-def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
+def determine_delay(y, x, p, q = 1, method = 'maxTE', temporal_blind = None, verbose = False):
 	"""
 	Description of function goes here
 
@@ -2609,6 +2642,12 @@ def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
 	method : string
 			What method to use in determining the optimal delay. One of
 			{'maxTE', 'minMSE'}.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
 	verbose : boolean
 			Whether to announce the stages of determine_delay.
 
@@ -2670,6 +2709,11 @@ def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
 
 	miCalc.setProperty(miCalcClass.L_PROP_NAME, "{}".format(q))
 	miCalc.setProperty(miCalcClass.K_PROP_NAME, "{}".format(p))
+
+	# Set Theiler window:
+
+	if temporal_blind is not None:
+		miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
 
 	delays = list(range(1, 11))
 	TE_by_delay = numpy.zeros(len(delays))
