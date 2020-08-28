@@ -2280,10 +2280,10 @@ def estimate_ais(x, p, n_neighbors = 5, temporal_blind = None, fix_vm = False):
 
 	if not isJVMStarted():
 		if fix_vm:
-			startJVM(getDefaultJVMPath(), "-ea", "-Xms10m",  "-Xmx100m", "-Xss100m", "-Djava.class.path=" + jarLocation, convertStrings = False)
+			startJVM(getDefaultJVMPath(), "-ea", "-Xms10m",  "-Xmx100m", "-Xss100m", "-Djava.class.path=" + jarLocation)
 			# startJVM(getDefaultJVMPath(), "-ea", "-Xms15G", "-Xmx30G", "-Djava.class.path=" + jarLocation)
 		else:
-			startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation, convertStrings = False)
+			startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
 
 	implementingClass = "infodynamics.measures.continuous.kraskov.MutualInfoCalculatorMultiVariateKraskov2"
 	indexOfLastDot = str.rfind(implementingClass, ".")
@@ -2367,7 +2367,7 @@ def estimate_mi(X, Y, n_neighbors = 5, temporal_blind = None):
 	jarLocation = '../jidt/infodynamics.jar'
 
 	if not isJVMStarted():
-		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation, convertStrings = False)
+		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
 
 	implementingClass = "infodynamics.measures.continuous.kraskov.MutualInfoCalculatorMultiVariateKraskov2"
 	indexOfLastDot = str.rfind(implementingClass, ".")
@@ -2401,7 +2401,7 @@ def estimate_mi(X, Y, n_neighbors = 5, temporal_blind = None):
 
 	return mi_estimate
 
-def estimate_lte(y, x, q, p, delay, k = 5, temporal_blind = None):
+def estimate_lte(y, x, q, p, delay, k = 5):
 	#tmp_lte, tmp_tte = estimate_lte(y, x, q_IO, p_O, delay = 0, k = 5)
 	"""
 	Estimate the local transfer entropy from y to x with autoregressive
@@ -2435,12 +2435,6 @@ def estimate_lte(y, x, q, p, delay, k = 5, temporal_blind = None):
 	k : int
 			The number of nearest neighbors to use in estimating
 			the local transfer entropy.
-	temporal_blind : int
-			Half of the temporal blind used in finding nearest
-			neighbors. If None, no temporal temporal blind is
-			used. Otherwise, only neighbors with indices
-			> temporal_blind will be considered as candidates
-			for being nearest neighbors.
 
 	Returns
 	-------
@@ -2477,7 +2471,7 @@ def estimate_lte(y, x, q, p, delay, k = 5, temporal_blind = None):
 	jarLocation = "../jidt/infodynamics.jar"
 
 	if not isJVMStarted():
-		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation, convertStrings = False)
+		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
 
 	implementingClass = "infodynamics.measures.continuous.kraskov.TransferEntropyCalculatorKraskov"
 	indexOfLastDot = str.rfind(implementingClass, ".")
@@ -2504,10 +2498,14 @@ def estimate_lte(y, x, q, p, delay, k = 5, temporal_blind = None):
 	miCalc.setProperty(miCalcClass.DELAY_PROP_NAME, "{}".format(delay+1))
 	miCalc.setProperty("k", "{}".format(k))
 
-	# Set Theiler window:
+	# Set Theiler window: 
 
-	if temporal_blind is not None:
-		miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
+	# Doesn't work since
+	# 	infodynamics.measures.continuous.kraskov.TransferEntropyCalculatorKraskov
+	# does not have the PROP_DYN_CORR_EXCL_TIME property!
+
+	# if temporal_blind is not None:
+	# 	miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
 
 	miCalc.initialise()
 
@@ -2540,6 +2538,109 @@ def estimate_lte(y, x, q, p, delay, k = 5, temporal_blind = None):
 		lTEs[:r] = numpy.nan
 	else:
 		lTEs = stack_sid_by_trial(lTEs, r, num_trials = x.shape[0], points_per_trial = x.shape[1])
+
+	return lTEs, TE
+
+def estimate_lte_directly_as_conditional_MI(y, x, q, p, delay, k = 5, temporal_blind = None):
+	#tmp_lte, tmp_tte = estimate_lte(y, x, q_IO, p_O, delay = 0, k = 5)
+	"""
+	Estimate the local transfer entropy from y to x with autoregressive
+	order q for y and p for x, and a time delay from y to x of delay.
+
+	The local transfer entropy is the expectand of the
+	total transfer entropy, which is the mutual information
+	between the future of X and the past of Y, conditional on
+	the past of X,
+
+		$I[X_{t}; Y_{t-q-delay}^{t-1-delay} | X_{t-p}^{t-1}]$
+
+	We use the Java Information Dynamics Toolbox (JIDT) to estimate
+	the local transfer entropy, using the KSG-inspired conditional 
+	mutual information estimator.
+
+	Parameters
+	----------
+	y : numpy.array
+			The nominal input process.
+	x : numpy.array
+			The nominal output process.
+	q : int
+			The autoregressive order for the nominal input process.
+	p : int
+			The autoregressive order for the nominal output process.
+	delay : int
+			The time delay to use for the input process, where
+			delay = 0 would give the standard (non-delayed) 
+			transfer entropy.
+	k : int
+			The number of nearest neighbors to use in estimating
+			the local transfer entropy.
+
+	Returns
+	-------
+	r : int
+			description
+
+	Notes
+	-----
+	Any notes go here.
+
+	Examples
+	--------
+	>>> import module_name
+	>>> # Demonstrate code here.
+
+	"""
+
+	r = numpy.max([p, q + delay])
+
+	if len(x.shape) == 1:
+		x = x.reshape(1, -1)
+		y = y.reshape(1, -1)
+
+	Z = stack_io(y, x, q, p, delay)
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Initialize the Java interface with JIDT using
+	# JPype:
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	# NOTE: Need infodynamics.jar in the appropriate directory for this to work!
+
+	jarLocation = "../jidt/infodynamics.jar"
+
+	if not isJVMStarted():
+		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
+
+	implementingClass = "infodynamics.measures.continuous.kraskov.ConditionalMutualInfoCalculatorMultiVariateKraskov2"
+	indexOfLastDot = str.rfind(implementingClass, ".")
+	implementingPackage = implementingClass[:indexOfLastDot]
+	implementingBaseName = implementingClass[indexOfLastDot+1:]
+	miCalcClass = eval('JPackage(\'%s\').%s' % (implementingPackage, implementingBaseName))
+	miCalc = miCalcClass()
+
+	# Set the properties of the JIDT LTE calculator based on the input
+	# to this function.
+
+	miCalc.setProperty("NOISE_LEVEL_TO_ADD", "0")
+
+	miCalc.setProperty("k", "{}".format(k))
+
+	# Set Theiler window: 
+
+	if temporal_blind is not None:
+		miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
+
+	# Takes X_{t}, Y_{t - q - delay}^{t - 1 - delay}, X_{t - p}^{t - 1}
+
+	miCalc.initialise(1, q, p)
+
+	miCalc.setObservations(Z[:, -1][:, numpy.newaxis], Z[:, 0:q], Z[:, q:(q + p)])
+
+	lTEs=numpy.array(miCalc.computeLocalOfPreviousObservations()[:])
+	TE = numpy.mean(lTEs)
 
 	return lTEs, TE
 
@@ -2696,7 +2797,7 @@ def determine_delay(y, x, p, q = 1, method = 'maxTE', temporal_blind = None, ver
 	jarLocation = "../jidt/infodynamics.jar"
 
 	if not isJVMStarted():
-		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation, convertStrings = False)
+		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
 
 	implementingClass = "infodynamics.measures.continuous.kraskov.TransferEntropyCalculatorKraskov"
 	indexOfLastDot = str.rfind(implementingClass, ".")
@@ -3941,10 +4042,10 @@ def estimate_ami_and_acf(x, num_lags, n_neighbors = 5, temporal_blind = None, is
 
 	if not isJVMStarted():
 		if fix_vm:
-			startJVM(getDefaultJVMPath(), "-ea", "-Xms10m",  "-Xmx100m", "-Xss100m", "-Djava.class.path=" + jarLocation, convertStrings = False)
+			startJVM(getDefaultJVMPath(), "-ea", "-Xms10m",  "-Xmx100m", "-Xss100m", "-Djava.class.path=" + jarLocation)
 			# startJVM(getDefaultJVMPath(), "-ea", "-Xms15G", "-Xmx30G", "-Djava.class.path=" + jarLocation)
 		else:
-			startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation, convertStrings = False)
+			startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
 
 	implementingClass = "infodynamics.measures.continuous.kraskov.MutualInfoCalculatorMultiVariateKraskov2"
 	indexOfLastDot = str.rfind(implementingClass, ".")
