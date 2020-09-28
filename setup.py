@@ -127,7 +127,7 @@ setup(
     # the `py_modules` argument instead as follows, which will expect a file
     # called `my_module.py` to exist:
     #
-      py_modules=["load_models", "pycondens", "sidpy"],
+      py_modules=["load_models", "pycondens", "sidpy", "ts_bootstraps"],
     #
     # packages=find_packages(where='src'),  # Required
 

@@ -1250,7 +1250,7 @@ def embed_ts_multihorizon(x, p_max, q, is_multirealization = False):
 
 	return X
 
-def embed_ts_multvar(x, p_max):
+def embed_ts_multvar(x, p_max, circular = False):
 	# 
 	# Let:
 	#	d be the dimension of the state space and
@@ -1268,10 +1268,19 @@ def embed_ts_multvar(x, p_max):
 	d = x.shape[0]
 	T = x.shape[1]
 
-	X = numpy.zeros((d, T - p_max, p_max + 1))
+	if not circular:
+		X = numpy.zeros((d, T - p_max, p_max + 1))
+	else:
+		X = numpy.zeros((d, T, p_max + 1))
 
 	for lag in range(p_max + 1):
-		X[:, :, lag] = x[:, lag:(T - p_max + lag)]
+		if not circular: # A regular embedding
+			inds = numpy.arange(lag, T - p_max + lag)
+		else: # Embed by wrapping the time series, for the circular bootstrap
+			inds = numpy.arange(lag, T + lag) % T # Mod out time series length
+
+
+		X[:, :, lag] = x[:, inds]
 
 	return X
 
