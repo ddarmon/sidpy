@@ -1,7 +1,7 @@
 import numpy
 import sidpy
 
-def circular_block_bootstrap_multvar(x, p_max, block_length = None, num_blocks = None, L_max = None):
+def circular_block_bootstrap_multvar(x, p_max, block_length = None, num_blocks = None, as_data_matrix = True):
 	T = x.shape[1]
 
 	if block_length == None:
@@ -34,4 +34,9 @@ def circular_block_bootstrap_multvar(x, p_max, block_length = None, num_blocks =
 
 	X_boot = X_boot[:, :(T - p_max), :]
 
-	return X_boot, block_length, num_blocks
+	if as_data_matrix:
+		return X_boot, block_length, num_blocks
+	else:
+		x_boot = numpy.concatenate((X_boot[:, :, 0], X_boot[:, -1, [1]]), axis = 1)
+
+		return x_boot, block_length, num_blocks
