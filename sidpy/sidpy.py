@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 gamma = scipy.special.gamma
 digamma = scipy.special.digamma
 
-def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_procedure = 'knn', nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True, suppress_warning = False):
+def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, temporal_blind = None, marginal_estimation_procedure = 'knn', nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True, suppress_warning = False):
 	"""
 	choose_model_order_nlpl computes the negative log-predictive likelihood (NLPL)
 	of the  data for varying model orders via a kernel nearest neighbor estimator
@@ -32,6 +32,12 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 			A number in [0, 1] that determines the upper bound
 			on the number of nearest neighbors to consider 
 			for the kernel nearest neighbor estimator.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
 	marginal_estimation_procedure : string
 			The estimation procedure used to estimate the 
 			differential entropy of x. One of {'knn', 'kde'},
@@ -112,6 +118,11 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 
 		n_neighbors = int(numpy.ceil(numpy.power(X_train.shape[0] - 1, pow_upperbound)))
 
+		if temporal_blind is None:
+			n_neighbors_with_mask = n_neighbors
+		else:
+			n_neighbors_with_mask = numpy.min([n_neighbors + 2*temporal_blind, X.shape[0] - 1])
+
 		n_neighbors_upperbound = n_neighbors
 
 		Z_train = X_train
@@ -130,7 +141,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 		if nn_package == 'pyflann':
 			flann = pyflann.FLANN()
 
-			neighbor_inds_train, distances_marg_train = flann.nn(Z_train,Z_train,n_neighbors + 1);
+			neighbor_inds_train, distances_marg_train = flann.nn(Z_train,Z_train,n_neighbors_with_mask + 1);
 
 			neighbor_inds_train = neighbor_inds_train[:, 1:]
 			# Prior to 141217, this was:
@@ -141,13 +152,16 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 
 			distances_marg_train = numpy.sqrt(distances_marg_train) # Since FLANN returns the *squared* Euclidean distance.
 		elif nn_package == 'sklearn':
-			knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+			knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors_with_mask, algorithm = 'kd_tree', p = Lp_norm)
 
 			knn_out = knn.fit(Z_train)
 
 			distances_marg_train, neighbor_inds_train = knn_out.kneighbors()
 		else:
 			assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
+
+		if temporal_blind is not None:
+			distances_marg_train, neighbor_inds_train = remove_temporal_nearest_neighbors(distances_marg_train, neighbor_inds_train, n_neighbors, temporal_blind)
 
 		if p_use == 1:
 			if marginal_estimation_procedure == 'knn':
@@ -309,7 +323,7 @@ def choose_model_order_nlpl(x, p_max, pow_upperbound = 0.5, marginal_estimation_
 
 	return p_opt, nlpl_opt, nlpl_by_p, er_knn, ler_knn
 
-def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_upperbound = 0.5, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
+def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_upperbound = 0.5, temporal_blind = None, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
 	"""
 	choose_model_order_io_nlpl computes the negative log-predictive 
 	likelihood (NLPL) of a k-nearest neighbor predictor for the output of 
@@ -339,6 +353,12 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 			A number in [0, 1] that determines the upper bound
 			on the number of nearest neighbors to consider 
 			for the k-nearest neighbor estimator.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
 	nn_package : string
 			The package used to compute the nearest neighbors,
 			one of {'sklearn', 'pyflann'}. sklearn is an exact
@@ -433,7 +453,7 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 					distances_marg_train = distances_marg_train[:, 1:]
 					distances_marg_train = numpy.sqrt(distances_marg_train) # Since FLANN returns the *squared* Euclidean distance.
 				elif nn_package == 'sklearn':
-					knn = neighbors.NearestNeighbors(n_for_marg, algorithm = 'kd_tree', p = Lp_norm)
+					knn = neighbors.NearestNeighbors(n_neighbors = n_for_marg, algorithm = 'kd_tree', p = Lp_norm)
 
 					knn_out = knn.fit(Z_train)
 
@@ -449,6 +469,9 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 				h_memoryless = numpy.mean(lh_memoryless)
 
 				nlpl_by_qp[q_ind, p_ind] = h_memoryless
+
+				if output_verbose:
+					print('For (q = {}, p = {}) NLPL(k*) = {}'.format(q_use, p_use, h_memoryless))
 			else:
 				Y = Y_full[:, (r_max-q_use):-1]
 				X = X_full[:, (r_max-p_use):]
@@ -460,6 +483,11 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 				X_train = Z
 
 				n_neighbors = int(numpy.ceil(numpy.power(X_train.shape[0] - 1, pow_upperbound)))
+				
+				if temporal_blind is None:
+					n_neighbors_with_mask = n_neighbors
+				else:
+					n_neighbors_with_mask = numpy.min([n_neighbors + 2*temporal_blind, X.shape[0] - 1])
 
 				n_neighbors_upperbound = n_neighbors
 
@@ -479,7 +507,7 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 				if nn_package == 'pyflann':
 					flann = pyflann.FLANN()
 
-					neighbor_inds_train, distances_marg_train = flann.nn(Z_train,Z_train,n_neighbors + 1);
+					neighbor_inds_train, distances_marg_train = flann.nn(Z_train,Z_train,n_neighbors_with_mask + 1);
 
 					neighbor_inds_train = neighbor_inds_train[:, 1:]
 					# Prior to 141217, this was:
@@ -490,14 +518,17 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 
 					distances_marg_train = numpy.sqrt(distances_marg_train) # Since FLANN returns the *squared* Euclidean distance.
 				elif nn_package == 'sklearn':
-					knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+					knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors_with_mask, algorithm = 'kd_tree', p = Lp_norm)
 
 					knn_out = knn.fit(Z_train)
 
 					distances_marg_train, neighbor_inds_train = knn_out.kneighbors()
 				else:
 					assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
-
+				
+				if temporal_blind is not None:
+					distances_marg_train, neighbor_inds_train = remove_temporal_nearest_neighbors(distances_marg_train, neighbor_inds_train, n_neighbors, temporal_blind)
+				
 				if announce_stages:
 					print('Done computing nearest neighbor distances...')
 
@@ -584,7 +615,7 @@ def choose_model_order_io_nlpl(y, x, q_max, p_fix = None, p_max = None, pow_uppe
 
 	return qs[q_opt_ind], ps[p_opt_ind], nlpl_opt, nlpl_by_qp
 
-def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
+def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, temporal_blind = None, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
 	"""
 	choose_model_order_mse computes the mean-squared error (MSE) of a k-nearest 
 	neighbor predictor for the data for varying model orders, and returns the 
@@ -601,6 +632,12 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn
 			A number in [0, 1] that determines the upper bound
 			on the number of nearest neighbors to consider 
 			for the k-nearest neighbor estimator.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
 	nn_package : string
 			The package used to compute the nearest neighbors,
 			one of {'sklearn', 'pyflann'}. sklearn is an exact
@@ -663,6 +700,11 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn
 		X = X_full[:, (p_max - p_use):]
 
 		n_neighbors = int(numpy.ceil(numpy.power(X.shape[0] - 1, pow_upperbound)))
+		
+		if temporal_blind is None:
+			n_neighbors_with_mask = n_neighbors
+		else:
+			n_neighbors_with_mask = numpy.min([n_neighbors + 2*temporal_blind, X.shape[0] - 1])
 
 		n_neighbors_upperbound = n_neighbors
 
@@ -677,20 +719,23 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn
 		if nn_package == 'pyflann':
 			flann = pyflann.FLANN()
 
-			neighbor_inds, distances_marg = flann.nn(Z,Z,n_neighbors + 1);
+			neighbor_inds, distances_marg = flann.nn(Z,Z,n_neighbors_with_mask + 1);
 
 			neighbor_inds = neighbor_inds[:, 1:]
 			distances_marg = distances_marg[:, 1:]
 
 			distances_marg = numpy.sqrt(distances_marg) # Since FLANN returns the *squared* Euclidean distance.
 		elif nn_package == 'sklearn':
-			knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+			knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors_with_mask, algorithm = 'kd_tree', p = Lp_norm)
 
 			knn_out = knn.fit(Z)
 
 			distances_marg, neighbor_inds = knn_out.kneighbors()
 		else:
 			assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
+
+		if temporal_blind is not None:
+			distances_marg, neighbor_inds = remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors, temporal_blind)
 
 		if announce_stages:
 			print('Done computing nearest neighbor distances...')
@@ -720,7 +765,7 @@ def choose_model_order_mse(x, p_max, pow_upperbound = 0.5, nn_package = 'sklearn
 
 	return p_opt, mse_opt, mse_by_p, kstar_by_p
 
-def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upperbound = 0.5, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
+def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upperbound = 0.5, temporal_blind = None, nn_package = 'sklearn', is_multirealization = False, announce_stages = False, output_verbose = True):
 	"""
 	choose_model_order_io_mse computes the mean-squared error (MSE) of a
 	k-nearest neighbor predictor for the output of the input-output
@@ -749,6 +794,12 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 			A number in [0, 1] that determines the upper bound
 			on the number of nearest neighbors to consider 
 			for the k-nearest neighbor estimator.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
 	nn_package : string
 			The package used to compute the nearest neighbors,
 			one of {'sklearn', 'pyflann'}. sklearn is an exact
@@ -828,6 +879,8 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 			if p_use == 0 and q_use == 0:
 				mse_by_qp[q_ind, p_ind] = numpy.mean(numpy.power(x - numpy.mean(x), 2))
 				kstar_by_qp[q_ind, p_ind] = len(x)
+
+				print('For (q = {}, p = {}) with MSE(k*) = {}'.format(q_use, p_use, mse_by_qp[q_ind, p_ind]))
 			else:
 				Y = Y_full[:, (r_max-q_use):-1]
 				X = X_full[:, (r_max-p_use):]
@@ -837,6 +890,11 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 				Z = numpy.concatenate((Y, X), axis = 1)
 
 				n_neighbors = int(numpy.ceil(numpy.power(Z.shape[0] - 1, pow_upperbound)))
+				
+				if temporal_blind is None:
+					n_neighbors_with_mask = n_neighbors
+				else:
+					n_neighbors_with_mask = numpy.min([n_neighbors + 2*temporal_blind, X.shape[0] - 1])
 
 				n_neighbors_upperbound = n_neighbors
 
@@ -851,20 +909,23 @@ def choose_model_order_io_mse(y, x, q_max, p_fix = None, p_max = None, pow_upper
 				if nn_package == 'pyflann':
 					flann = pyflann.FLANN()
 
-					neighbor_inds, distances_marg = flann.nn(Z_past,Z_past,n_neighbors + 1);
+					neighbor_inds, distances_marg = flann.nn(Z_past,Z_past,n_neighbors_with_mask + 1);
 
 					neighbor_inds = neighbor_inds[:, 1:]
 					distances_marg = distances_marg[:, 1:]
 
 					distances_marg = numpy.sqrt(distances_marg) # Since FLANN returns the *squared* Euclidean distance.
 				elif nn_package == 'sklearn':
-					knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+					knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors_with_mask, algorithm = 'kd_tree', p = Lp_norm)
 
 					knn_out = knn.fit(Z_past)
 
 					distances_marg, neighbor_inds = knn_out.kneighbors()
 				else:
 					assert False, "Please select either 'sklearn' or 'pyflann' for nn_package."
+
+				if temporal_blind is not None:
+					distances_marg, neighbor_inds = remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors, temporal_blind)
 
 				if announce_stages:
 					print('Done computing nearest neighbor distances...')
@@ -1015,7 +1076,7 @@ def choose_model_order_joint_mse(y, x, q_max, p_max, pow_upperbound = 0.5, nn_pa
 
 					distances_marg = numpy.sqrt(distances_marg) # Since FLANN returns the *squared* Euclidean distance.
 				elif nn_package == 'sklearn':
-					knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+					knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
 
 					knn_out = knn.fit(Z_past)
 
@@ -1054,7 +1115,7 @@ def choose_model_order_joint_mse(y, x, q_max, p_max, pow_upperbound = 0.5, nn_pa
 def compute_nearest_neighbors_1d(X, n_neighbors, Lp_norm = 2):
 	Z = X
 
-	knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+	knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
 
 	knn_out = knn.fit(Z)
 
@@ -1065,7 +1126,7 @@ def compute_nearest_neighbors_1d(X, n_neighbors, Lp_norm = 2):
 def compute_nearest_neighbors(X, n_neighbors, Lp_norm = 2):
 	Z = X
 
-	knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+	knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
 
 	knn_out = knn.fit(Z)
 
@@ -1073,7 +1134,7 @@ def compute_nearest_neighbors(X, n_neighbors, Lp_norm = 2):
 
 	Z = X[:, :-1]
 
-	knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+	knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
 
 	knn_out = knn.fit(Z)
 
@@ -1082,7 +1143,7 @@ def compute_nearest_neighbors(X, n_neighbors, Lp_norm = 2):
 	return distances_marg, distances_joint, nn_inds_marg, nn_inds_joint
 
 def compute_nearest_neighbors_cross(Xfit, Xeval, n_neighbors, Lp_norm = 2):
-	knn = neighbors.NearestNeighbors(n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
+	knn = neighbors.NearestNeighbors(n_neighbors = n_neighbors, algorithm = 'kd_tree', p = Lp_norm)
 
 	knn_out = knn.fit(Xfit)
 
@@ -1189,7 +1250,7 @@ def embed_ts_multihorizon(x, p_max, q, is_multirealization = False):
 
 	return X
 
-def embed_ts_multvar(x, p_max):
+def embed_ts_multvar(x, p_max, circular = False):
 	# 
 	# Let:
 	#	d be the dimension of the state space and
@@ -1207,10 +1268,19 @@ def embed_ts_multvar(x, p_max):
 	d = x.shape[0]
 	T = x.shape[1]
 
-	X = numpy.zeros((d, T - p_max, p_max + 1))
+	if not circular:
+		X = numpy.zeros((d, T - p_max, p_max + 1))
+	else:
+		X = numpy.zeros((d, T, p_max + 1))
 
 	for lag in range(p_max + 1):
-		X[:, :, lag] = x[:, lag:(T - p_max + lag)]
+		if not circular: # A regular embedding
+			inds = numpy.arange(lag, T - p_max + lag)
+		else: # Embed by wrapping the time series, for the circular bootstrap
+			inds = numpy.arange(lag, T + lag) % T # Mod out time series length
+
+
+		X[:, :, lag] = x[:, inds]
 
 	return X
 
@@ -2002,7 +2072,7 @@ def estimate_normalized_qstep_outsample(x_train, x_test, log_dist_ratio_train, p
 
 	X_0_test = embed_ts_multihorizon(x_test, p_opt, 0)
 
-	X_0      = X_0[:-q, :]
+	X_0	  = X_0[:-q, :]
 
 	n_neighbors_for_den = 5
 
@@ -2165,7 +2235,7 @@ def smooth(x,window_len=11,window='hanning'):
 	y=numpy.convolve(w/w.sum(),s,mode='valid')
 	return y
 
-def estimate_ais(x, p, n_neighbors = 5, fix_vm = False):
+def estimate_ais(x, p, n_neighbors = 5, temporal_blind = None, fix_vm = False):
 	"""
 	Estimate the active information storage between the future and
 	a past of length p_opt,
@@ -2185,6 +2255,12 @@ def estimate_ais(x, p, n_neighbors = 5, fix_vm = False):
 	k : int
 			The number of nearest neighbors to use in estimating
 			the local transfer entropy.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
 
 	Returns
 	-------
@@ -2234,6 +2310,11 @@ def estimate_ais(x, p, n_neighbors = 5, fix_vm = False):
 
 	miCalc.setProperty("k", "{}".format(n_neighbors))
 
+	# Set Theiler window:
+
+	if temporal_blind is not None:
+		miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
+
 	X_ais = embed_ts(x, p_max = p)
 
 	sourceArray = X_ais[:, :-1]
@@ -2243,11 +2324,11 @@ def estimate_ais(x, p, n_neighbors = 5, fix_vm = False):
 
 	miCalc.setObservations(sourceArray, destArray)
 
-	ais_estimate = miCalc.computeAverageLocalOfObservations()
+	ais_estimate = numpy.array(miCalc.computeAverageLocalOfObservations())
 
 	return ais_estimate
 
-def estimate_mi(X, Y, n_neighbors = 5):
+def estimate_mi(X, Y, n_neighbors = 5, temporal_blind = None):
 	"""
 	Estimate the mutual information between X and Y, using the 
 	Java Information Dynamics Toolbox (JIDT) implementation of
@@ -2262,6 +2343,12 @@ def estimate_mi(X, Y, n_neighbors = 5):
 	n_neighbors : int
 			The number of nearest neighbors to use in estimating
 			the local transfer entropy.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
 
 	Returns
 	-------
@@ -2307,6 +2394,11 @@ def estimate_mi(X, Y, n_neighbors = 5):
 
 	miCalc.setProperty("k", "{}".format(n_neighbors))
 
+	# Set Theiler window:
+
+	if temporal_blind is not None:
+		miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
+
 	sourceArray = X.reshape(-1, 1)
 	destArray = Y.reshape(-1, 1)
 
@@ -2314,7 +2406,7 @@ def estimate_mi(X, Y, n_neighbors = 5):
 
 	miCalc.setObservations(sourceArray, destArray)
 
-	mi_estimate = miCalc.computeAverageLocalOfObservations()
+	mi_estimate = numpy.array(miCalc.computeAverageLocalOfObservations())
 
 	return mi_estimate
 
@@ -2415,6 +2507,15 @@ def estimate_lte(y, x, q, p, delay, k = 5):
 	miCalc.setProperty(miCalcClass.DELAY_PROP_NAME, "{}".format(delay+1))
 	miCalc.setProperty("k", "{}".format(k))
 
+	# Set Theiler window: 
+
+	# Doesn't work since
+	# 	infodynamics.measures.continuous.kraskov.TransferEntropyCalculatorKraskov
+	# does not have the PROP_DYN_CORR_EXCL_TIME property!
+
+	# if temporal_blind is not None:
+	# 	miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
+
 	miCalc.initialise()
 
 	miCalc.startAddObservations()
@@ -2424,7 +2525,7 @@ def estimate_lte(y, x, q, p, delay, k = 5):
 
 	miCalc.finaliseAddObservations()
 
-	lTEs=miCalc.computeLocalOfPreviousObservations()[:]
+	lTEs=numpy.array(miCalc.computeLocalOfPreviousObservations()[:])
 	TE = numpy.nanmean(lTEs)
 
 	# Need to handle the case of single-realization and
@@ -2446,6 +2547,109 @@ def estimate_lte(y, x, q, p, delay, k = 5):
 		lTEs[:r] = numpy.nan
 	else:
 		lTEs = stack_sid_by_trial(lTEs, r, num_trials = x.shape[0], points_per_trial = x.shape[1])
+
+	return lTEs, TE
+
+def estimate_lte_directly_as_conditional_MI(y, x, q, p, delay, k = 5, temporal_blind = None):
+	#tmp_lte, tmp_tte = estimate_lte(y, x, q_IO, p_O, delay = 0, k = 5)
+	"""
+	Estimate the local transfer entropy from y to x with autoregressive
+	order q for y and p for x, and a time delay from y to x of delay.
+
+	The local transfer entropy is the expectand of the
+	total transfer entropy, which is the mutual information
+	between the future of X and the past of Y, conditional on
+	the past of X,
+
+		$I[X_{t}; Y_{t-q-delay}^{t-1-delay} | X_{t-p}^{t-1}]$
+
+	We use the Java Information Dynamics Toolbox (JIDT) to estimate
+	the local transfer entropy, using the KSG-inspired conditional 
+	mutual information estimator.
+
+	Parameters
+	----------
+	y : numpy.array
+			The nominal input process.
+	x : numpy.array
+			The nominal output process.
+	q : int
+			The autoregressive order for the nominal input process.
+	p : int
+			The autoregressive order for the nominal output process.
+	delay : int
+			The time delay to use for the input process, where
+			delay = 0 would give the standard (non-delayed) 
+			transfer entropy.
+	k : int
+			The number of nearest neighbors to use in estimating
+			the local transfer entropy.
+
+	Returns
+	-------
+	r : int
+			description
+
+	Notes
+	-----
+	Any notes go here.
+
+	Examples
+	--------
+	>>> import module_name
+	>>> # Demonstrate code here.
+
+	"""
+
+	r = numpy.max([p, q + delay])
+
+	if len(x.shape) == 1:
+		x = x.reshape(1, -1)
+		y = y.reshape(1, -1)
+
+	Z = stack_io(y, x, q, p, delay)
+
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	#
+	# Initialize the Java interface with JIDT using
+	# JPype:
+	#
+	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	# NOTE: Need infodynamics.jar in the appropriate directory for this to work!
+
+	jarLocation = "../jidt/infodynamics.jar"
+
+	if not isJVMStarted():
+		startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
+
+	implementingClass = "infodynamics.measures.continuous.kraskov.ConditionalMutualInfoCalculatorMultiVariateKraskov2"
+	indexOfLastDot = str.rfind(implementingClass, ".")
+	implementingPackage = implementingClass[:indexOfLastDot]
+	implementingBaseName = implementingClass[indexOfLastDot+1:]
+	miCalcClass = eval('JPackage(\'%s\').%s' % (implementingPackage, implementingBaseName))
+	miCalc = miCalcClass()
+
+	# Set the properties of the JIDT LTE calculator based on the input
+	# to this function.
+
+	miCalc.setProperty("NOISE_LEVEL_TO_ADD", "0")
+
+	miCalc.setProperty("k", "{}".format(k))
+
+	# Set Theiler window: 
+
+	if temporal_blind is not None:
+		miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
+
+	# Takes X_{t}, Y_{t - q - delay}^{t - 1 - delay}, X_{t - p}^{t - 1}
+
+	miCalc.initialise(1, q, p)
+
+	miCalc.setObservations(Z[:, -1][:, numpy.newaxis], Z[:, 0:q], Z[:, q:(q + p)])
+
+	lTEs=numpy.array(miCalc.computeLocalOfPreviousObservations()[:])
+	TE = numpy.mean(lTEs)
 
 	return lTEs, TE
 
@@ -2530,7 +2734,7 @@ def estimate_lte_iopo(y, x, q, p_io, p_o, delay, k = 5):
 
 	return lTEs, TE
 
-def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
+def determine_delay(y, x, p, q = 1, method = 'maxTE', temporal_blind = None, verbose = False):
 	"""
 	Description of function goes here
 
@@ -2548,6 +2752,12 @@ def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
 	method : string
 			What method to use in determining the optimal delay. One of
 			{'maxTE', 'minMSE'}.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
 	verbose : boolean
 			Whether to announce the stages of determine_delay.
 
@@ -2610,6 +2820,11 @@ def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
 	miCalc.setProperty(miCalcClass.L_PROP_NAME, "{}".format(q))
 	miCalc.setProperty(miCalcClass.K_PROP_NAME, "{}".format(p))
 
+	# Set Theiler window:
+
+	if temporal_blind is not None:
+		miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
+
 	delays = list(range(1, 11))
 	TE_by_delay = numpy.zeros(len(delays))
 
@@ -2636,7 +2851,7 @@ def determine_delay(y, x, p, q = 1, method = 'maxTE', verbose = False):
 
 		# print 'Computing local Transfer Entropies...'
 
-		lTEs=miCalc.computeLocalOfPreviousObservations()[:]
+		lTEs=numpy.array(miCalc.computeLocalOfPreviousObservations()[:])
 		TE = numpy.mean(lTEs)
 
 		TE_by_delay[delay_ind] = TE
@@ -3352,8 +3567,8 @@ def choose_k_for_ser_estimation(x, p_opt):
 
 	Lp_norm = 2.
 
-	knn_for_ser = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
-	knn_for_ler = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ser = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ler = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
 
 	knn_out_for_ser = knn_for_ser.fit(X_train)
 	knn_out_for_ler = knn_for_ler.fit(X_test)
@@ -3378,8 +3593,8 @@ def choose_k_for_ser_estimation(x, p_opt):
 	Z_train = X_train[:, :-1]
 	Z_test = X_test[:, :-1]
 
-	knn_for_ser = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
-	knn_for_ler = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ser = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ler = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
 
 	knn_out_for_ser = knn_for_ser.fit(Z_train)
 	knn_out_for_ler = knn_for_ler.fit(Z_test)
@@ -3548,8 +3763,8 @@ def choose_k_for_ser_estimation_locfit(x, p_opt, maxk = 1000):
 	# Create structures for estimating the h[X_{t-p}^{t}] separately
 	# in both the training and test sets.
 
-	knn_for_ser = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
-	knn_for_ler = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ser = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ler = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
 
 	# Find the nearest neighbors separately in the
 	# training and test sets.
@@ -3581,8 +3796,8 @@ def choose_k_for_ser_estimation_locfit(x, p_opt, maxk = 1000):
 	Z_train = X_train[:, :-1]
 	Z_test = X_test[:, :-1]
 
-	knn_for_ser = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
-	knn_for_ler = neighbors.NearestNeighbors(n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ser = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
+	knn_for_ler = neighbors.NearestNeighbors(n_neighbors = n_neighbors_max, algorithm = 'ball_tree', metric = 'euclidean')
 
 	knn_out_for_ser = knn_for_ser.fit(Z_train)
 	knn_out_for_ler = knn_for_ler.fit(Z_test)
@@ -3632,11 +3847,11 @@ def choose_k_for_ser_estimation_locfit(x, p_opt, maxk = 1000):
 	r = robjects.r
 
 	r('''
-	        choose.nn.splithalf <- function(x.train, y.train, x.tune, y.tune, maxk = 1000) {
+			choose.nn.splithalf <- function(x.train, y.train, x.tune, y.tune, maxk = 1000) {
 				spars = c(seq(0.1, 1, by = 0.01), 1000)
 
-	            # spars = seq(0.5, 1, by = 0.01)
-	            # spars = seq(0.7, 1, by = 0.01)
+				# spars = seq(0.5, 1, by = 0.01)
+				# spars = seq(0.7, 1, by = 0.01)
 				err.by.spars = rep(0, length(spars))
 
 				for (spar.ind in 1:length(spars)){
@@ -3669,8 +3884,8 @@ def choose_k_for_ser_estimation_locfit(x, p_opt, maxk = 1000):
 				spar.min = spars[arg.spar.min]
 
 				return(spar.min)
-	        }
-	        ''')
+			}
+			''')
 
 	rlocfit = r['locfit.raw'] 
 
@@ -3712,10 +3927,194 @@ def plot_noise_versus_ts(x, noise, lag_max = 5):
 
 	square_side = int(numpy.ceil(numpy.sqrt(num_plots)))
 
-	fig, ax = plt.subplots(square_side, square_side, sharex = True, sharey = True)
+	fig, ax = plt.subplots(square_side, square_side)
 
-	for flat_index in range(lag_max + 1):
+	ax[0, 0].plot(Noise[:, -2], Noise[:, -1], '.')
+	ax[0, 0].set_xlabel('$\\epsilon_{{t - 1}}$')
+	ax[0, 0].set_ylabel('$\\epsilon_{{t}}$')
+
+	for flat_index in range(1, lag_max + 1):
 		ax_inds = numpy.unravel_index(flat_index, (square_side, square_side))
 		ax[ax_inds].plot(X[:, -1 - flat_index], Noise[:, -1], '.')
 		ax[ax_inds].set_xlabel('$X_{{t - {}}}$'.format(flat_index))
-		ax[ax_inds].set_ylabel('$\\epsilon_{{t}}$'.format(flat_index))
+		ax[ax_inds].set_ylabel('$\\epsilon_{{t}}$')
+
+def plot_lagplot(x, lag_max = 5, state_label = 'X'):
+	num_plots = lag_max
+
+	X = embed_ts(x, lag_max)
+
+	square_side = int(numpy.ceil(numpy.sqrt(num_plots)))
+
+	fig, ax = plt.subplots(square_side, square_side)
+
+	for flat_index in range(0, lag_max):
+		ax_inds = numpy.unravel_index(flat_index, (square_side, square_side))
+		ax[ax_inds].plot(X[:, -2 - flat_index], X[:, -1], '.')
+		ax[ax_inds].set_xlabel('${}_{{t - {}}}$'.format(state_label, flat_index))
+		ax[ax_inds].set_ylabel('${}_{{t}}$'.format(state_label))
+
+def remove_temporal_nearest_neighbors(distances_marg, neighbor_inds, n_neighbors, half_blind_size):
+	"""
+	remove_temporal_nearest_neighbors returns distances_marg and neighbor_inds
+	with temporal neighbors closer in time than half_blind_size removed.
+
+	This incorporates a "temporal blind", a la Theiler window, for highly
+	autocorrelated signals.
+
+	Parameters
+	----------
+	distances_marg : numpy.array
+			An array of nearest neighbor distances.
+	neighbor_inds : numpy.array
+			An array of nearest neighbor indices.
+	n_neighbors : int
+			The desired number of nearest neighbors after
+			accounting for the temporal blind.
+	half_blind_size : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
+
+	Returns
+	-------
+	distances_marg_masked : numpy.array
+			The nearest neighbor distances after
+			accounting for the temporal blind.
+	neighbor_inds_masked : numpy.array
+			The nearest neighbor indices after
+			accounting for the temporal blind.
+
+	"""
+
+	mask_temporal_neighbors = numpy.abs(neighbor_inds - numpy.arange(distances_marg.shape[0])[:, numpy.newaxis]) > half_blind_size
+
+	distances_marg_masked = numpy.zeros((distances_marg.shape[0], n_neighbors), dtype = numpy.float64)
+	neighbor_inds_masked = numpy.zeros((distances_marg.shape[0], n_neighbors), dtype = numpy.int32)
+
+	for t in range(distances_marg.shape[0]):
+		mask = mask_temporal_neighbors[t, :]
+
+		distances_marg_masked[t, :] = distances_marg[t, mask][:n_neighbors]
+		neighbor_inds_masked[t, :] = neighbor_inds[t, mask][:n_neighbors]
+
+	return distances_marg_masked, neighbor_inds_masked
+
+def estimate_ami_and_acf(x, num_lags, n_neighbors = 5, temporal_blind = None, is_multirealization = False, plot = False, fix_vm = False):
+	"""
+	estimate_ami_and_acf estimates the auto-mutual information (ami) and
+	autocorrelation funciton (acf) of the time series stored in x up
+	to num_lags.
+
+	Parameters
+	----------
+	x : list or numpy.array
+			The time series as a list (if is_multirealization == False)
+			or a numpy.array (if is_multirealization == True).
+	num_lags : int
+			The maximum number of lags to estimate ami and
+			acf up to.
+	n_neighbors : int
+			The number of neighbors to use in the KSG estimator
+			for mutual information.
+	temporal_blind : int
+			Half of the temporal blind used in finding nearest
+			neighbors. If None, no temporal temporal blind is
+			used. Otherwise, only neighbors with indices
+			> temporal_blind will be considered as candidates
+			for being nearest neighbors.
+	is_multirealization : boolean
+			Is the time series x given as 
+			a single long time series, or in a 
+			realization-by-realization format 
+			where each row corresponds to a single
+			realization?
+	plot : boolean
+			Whether or not to plot the AMI and ACF.
+	fix_vm : boolean
+			Whether to allocate more memory to the JVM
+			used by JIDT.
+
+	Returns
+	-------
+	lags : numpy.array
+			The lags at which AMI and ACF were estimated.
+	ami : numpy.array
+			The estimated AMI at each lag.
+	acf : numpy.array
+			The estimated ACF at each lag.
+	"""
+
+	jarLocation = '../jidt/infodynamics.jar'
+
+	if not isJVMStarted():
+		if fix_vm:
+			startJVM(getDefaultJVMPath(), "-ea", "-Xms10m",  "-Xmx100m", "-Xss100m", "-Djava.class.path=" + jarLocation)
+			# startJVM(getDefaultJVMPath(), "-ea", "-Xms15G", "-Xmx30G", "-Djava.class.path=" + jarLocation)
+		else:
+			startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=" + jarLocation)
+
+	implementingClass = "infodynamics.measures.continuous.kraskov.MutualInfoCalculatorMultiVariateKraskov2"
+	indexOfLastDot = str.rfind(implementingClass, ".")
+	implementingPackage = implementingClass[:indexOfLastDot]
+	implementingBaseName = implementingClass[indexOfLastDot+1:]
+
+	mi_by_lag = numpy.zeros(num_lags)
+	acf_by_lag = numpy.zeros(num_lags)
+
+	x = x - numpy.mean(x)
+
+	lags = numpy.arange(1, num_lags + 1)
+
+	for p_max in lags:
+		X = embed_ts(x, p_max = p_max, is_multirealization = True)
+
+		miCalcClass = eval('JPackage(\'%s\').%s' % (implementingPackage, implementingBaseName))
+		miCalc = miCalcClass()
+
+		# Turn off the (artificial) addition of 
+		# observational noise:
+
+		miCalc.setProperty("NOISE_LEVEL_TO_ADD", "0")
+
+		# Set the nearest neighbor parameter:
+
+		miCalc.setProperty("k", "{}".format(n_neighbors))
+
+		# Set Theiler window:
+
+		if temporal_blind is not None:
+			miCalc.setProperty(miCalc.PROP_DYN_CORR_EXCL_TIME, "{}".format(temporal_blind))
+
+		sourceArray = X[:, -1]
+		destArray = X[:, -(p_max + 1)]
+
+		miCalc.initialise(1, 1)
+
+		miCalc.setObservations(sourceArray, destArray)
+
+		ais_estimate = numpy.array(miCalc.computeAverageLocalOfObservations())
+
+		acf_estimate = numpy.mean(X[:, -1]*X[:, -(p_max + 1)])/numpy.var(X[:, -1])
+
+		mi_by_lag[p_max - 1] = ais_estimate
+
+		acf_by_lag[p_max - 1] = acf_estimate
+
+	if plot:
+		fig, ax = plt.subplots(2, 1, sharex = True)
+
+		ax[0].plot(lags, mi_by_lag)
+		ax[1].plot(lags, acf_by_lag)
+		ax[0].set_ylabel('AMI')
+		ax[1].set_ylabel('ACF')
+		ax[1].set_xlabel('Lag')
+		ax[0].set_ylim([-0.2, numpy.max(mi_by_lag)*1.2])
+		ax[0].axhline(0, color = 'black', linestyle = ':')
+		ax[1].set_ylim([-1, 1])
+		ax[1].axhline(1/numpy.exp(1), linestyle = ':')
+		ax[1].axhline(0, color = 'black', linestyle = ':')
+
+	return {"lags" : lags, "ami" : mi_by_lag, "acf" : acf_by_lag}
