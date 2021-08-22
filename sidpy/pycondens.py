@@ -291,7 +291,7 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, is_multirealization = False
 		h_cur, active_set_cur = load_bandwidth_o('bw-saved/' + save_name + '-' + str(p), p_max)
 
 		h_raw[p] = h_cur
-		active_set_return[p] = active_set_return
+		active_set_return[p] = active_set_cur
 
 	p_opt = numpy.argmin(nlls)
 
