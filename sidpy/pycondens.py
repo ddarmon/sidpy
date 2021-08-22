@@ -215,7 +215,9 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, is_multirealization = False
 	options_use = {'ftol' : 0.00001, 'xtol' : 0.001, 'maxiter' : 1000, 'maxfev' : 1000, 'disp' : to_display}
 
 	optim_out = scipy.optimize.minimize(score_data_lwo, numpy.sqrt(h), args = (De, lwo_halfwidth), method=opt_method, options = options_use)
+
 	h_opt = optim_out['x']*optim_out['x']
+	h_opt = h_opt[0] # Pull out actual value.
 
 	nlls = [optim_out['fun']]
 
@@ -227,7 +229,7 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, is_multirealization = False
 	if not os.path.exists('bw-saved'):
 		os.makedirs('bw-saved')
 
-	save_bandwidth_o(p_max, h[0], numpy.array([0]), sd_x, 'bw-saved/' + save_name + '-' + str(0))
+	save_bandwidth_o(p_max, [h[0]], numpy.array([0]), sd_x, 'bw-saved/' + save_name + '-' + str(0))
 
 	if output_verbose:
 		print(h)
@@ -250,7 +252,7 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, is_multirealization = False
 		active_set = numpy.array([p_max - p] + active_set.tolist())
 		
 		De = De_max[:, :, active_set] # Pull out the active set from De_max
-		
+
 		if type(h) != list:
 			h = h.tolist()
 		
