@@ -104,7 +104,7 @@ def stack_distance_matrix(x, p_max, mean_x = 0., sd_x = 1.0, is_multirealization
 
 		# p_max is the largest p we will consider.
 
-		ps = range(1, p_max + 1)
+		ps = list(range(1, p_max + 1))
 
 		# Stack the submatrices of D so that we can 
 		# easily compute the distances in the *embedding* space.
@@ -246,7 +246,7 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, is_multirealization = False
 
 	active_sets[0] = active_set
 
-	ps = range(1, p_max + 1)
+	ps = list(range(1, p_max + 1))
 
 	for p in ps:
 		if output_verbose:
@@ -341,7 +341,7 @@ def score_model_orders_with_saved_bws(x, p_max, save_name, is_multirealization =
 	#
 	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-	ps = range(1, p_max + 1)
+	ps = list(range(1, p_max + 1))
 
 	for p in ps:
 		h, active_set = load_bandwidth_o('bw-saved/' + save_name + '-' + str(p), p)
