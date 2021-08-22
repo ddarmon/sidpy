@@ -6,8 +6,6 @@ from sklearn.metrics.pairwise import pairwise_distances
 
 from scipy.stats import norm
 
-import weave
-
 import sidpy
 
 from itertools import islice
@@ -216,7 +214,7 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, is_multirealization = False
 
 	options_use = {'ftol' : 0.00001, 'xtol' : 0.001, 'maxiter' : 1000, 'maxfev' : 1000, 'disp' : to_display}
 
-	optim_out = scipy.optimize.minimize(score_data_lwo_weave, numpy.sqrt(h), args = (De, lwo_halfwidth), method=opt_method, options = options_use)
+	optim_out = scipy.optimize.minimize(score_data_lwo, numpy.sqrt(h), args = (De, lwo_halfwidth), method=opt_method, options = options_use)
 	h_opt = optim_out['x']*optim_out['x']
 
 	nlls = [optim_out['fun']]
@@ -261,7 +259,7 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, is_multirealization = False
 		
 		h = [numpy.power(De_max.shape[0], -1./(p + 5))] + h
 
-		optim_out = scipy.optimize.minimize(score_data_lwo_weave, numpy.sqrt(h), args = (De, lwo_halfwidth), method=opt_method, options = options_use)
+		optim_out = scipy.optimize.minimize(score_data_lwo, numpy.sqrt(h), args = (De, lwo_halfwidth), method=opt_method, options = options_use)
 		h_opt = optim_out['x']*optim_out['x']
 		
 		if output_verbose:
@@ -322,7 +320,7 @@ def score_model_orders_with_saved_bws(x, p_max, save_name, is_multirealization =
 
 	De = De_max[:, :, p_max][:, :, numpy.newaxis]
 
-	nlls = [score_data_lwo_weave(numpy.sqrt(h), De, lwo_halfwidth)]
+	nlls = [score_data_lwo(numpy.sqrt(h), De, lwo_halfwidth)]
 
 	hs  = {}
 
@@ -346,7 +344,7 @@ def score_model_orders_with_saved_bws(x, p_max, save_name, is_multirealization =
 		
 		De = De_max[:, :, p_max - p:][:, :, active_set] # Pull out the active set from De_max
 
-		nlls.append(score_data_lwo_weave(numpy.sqrt(h), De, lwo_halfwidth))
+		nlls.append(score_data_lwo(numpy.sqrt(h), De, lwo_halfwidth))
 
 		hs[p] = h
 		active_sets[p] = active_set
