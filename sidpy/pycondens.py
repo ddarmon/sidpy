@@ -410,7 +410,7 @@ def estimate_ser_kde(x, p_opt, h, active_set, is_multirealization = False):
 
 	for t in range(N):
 		if t % 100 == 0:
-			print('On t = {} of {}.'.format(t, N)
+			print('On t = {} of {}.'.format(t, N))
 
 		lb = numpy.max([0, t - lwo_halfwidth])
 		ub = numpy.min([N-1, t + lwo_halfwidth])
