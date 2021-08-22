@@ -80,7 +80,7 @@ def stack_distance_matrix(x, p_max, mean_x = 0., sd_x = 1.0, is_multirealization
 		hx_cutoff = scipy.optimize.brentq(func_h_cutoff, a = 0.1, b = 100, args = (rsx, eps))
 
 		if output_verbose:
-			print 'Using bandwidth cutoffs hx = {}'.format(hx_cutoff)
+			print('Using bandwidth cutoffs hx = {}'.format(hx_cutoff))
 
 		# Compute the L1 distances between each
 		# timepoint in x, 
@@ -171,7 +171,7 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, is_multirealization = False
 	hx_cutoff = scipy.optimize.brentq(func_h_cutoff, a = 0.1, b = 100, args = (rsx, eps))
 
 	if output_verbose:
-		print 'Using bandwidth cutoffs hx = {}'.format(hx_cutoff)
+		print('Using bandwidth cutoffs hx = {}'.format(hx_cutoff))
 
 	De_max = stack_distance_matrix(x, p_max, mean_x = mean_x, sd_x = sd_x, is_multirealization = is_multirealization, output_verbose = output_verbose)
 
@@ -410,7 +410,7 @@ def estimate_ser_kde(x, p_opt, h, active_set, is_multirealization = False):
 
 	for t in range(N):
 		if t % 100 == 0:
-			print 'On t = {} of {}.'.format(t, N)
+			print('On t = {} of {}.'.format(t, N)
 
 		lb = numpy.max([0, t - lwo_halfwidth])
 		ub = numpy.min([N-1, t + lwo_halfwidth])
@@ -472,7 +472,7 @@ def score_data_lwo(h_sr, De, lwo_halfwidth = 0, print_iterates = False):
 	score = -numpy.log(fs).mean()
 	
 	if print_iterates:
-		print h, score
+		print(h, score)
 	
 	return score
 
@@ -520,7 +520,7 @@ def score_data_lwo_bm(h_sr, De, lwo_halfwidth = 0, print_iterates = False):
 	score = -numpy.log(fs/h[p_internal]/numpy.sqrt(2*numpy.pi)).mean()
 	
 	if print_iterates:
-		print h, score
+		print(h, score)
 	
 	return score
 
@@ -627,7 +627,7 @@ def score_data_lwo_weave(h_sr, De, lwo_halfwidth = 0, print_iterates = False):
 	score = -numpy.log(fs/h[p_internal]/numpy.sqrt(2*numpy.pi)).mean()
 	
 	if print_iterates:
-		print h, score
+		print(h, score)
 	
 	return score
 
@@ -847,7 +847,7 @@ def score_data_weave(h_sr, De, print_iterates = False):
 	score = -numpy.log(fs/h[p_internal]/numpy.sqrt(2*numpy.pi)).mean()
 	
 	if print_iterates:
-		print h, score
+		print(h, score)
 	
 	return score
 
@@ -952,8 +952,6 @@ def score_data_lwo_rawh_weave(h, De, lwo_halfwidth = 0):
 
 	score = -numpy.log(fs/h[p_internal]/numpy.sqrt(2*numpy.pi)).mean()
 	
-	# print h, score
-	
 	return score
 
 def score_data_lai(h_sr, De, lwo_halfwidth = 0):
@@ -994,8 +992,6 @@ def score_data_lai(h_sr, De, lwo_halfwidth = 0):
 	fs = s_top.sum()/s_bottom.sum()
 	
 	score = -numpy.log(fs/h[p_internal]/numpy.sqrt(2*numpy.pi)).mean()
-	
-	# print h, score
 	
 	return score
 
