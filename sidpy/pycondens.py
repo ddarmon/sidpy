@@ -12,6 +12,8 @@ from itertools import islice
 
 import os
 
+from numba import jit
+
 def stack_distance_matrix(x, p_max, mean_x = 0., sd_x = 1.0, is_multirealization = False, output_verbose = False):
 	if is_multirealization:
 		ns = []
@@ -214,7 +216,7 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, is_multirealization = False
 
 	options_use = {'ftol' : 0.00001, 'xtol' : 0.001, 'maxiter' : 1000, 'maxfev' : 1000, 'disp' : to_display}
 
-	optim_out = scipy.optimize.minimize(score_data_lwo, numpy.sqrt(h), args = (De, lwo_halfwidth), method=opt_method, options = options_use)
+	optim_out = scipy.optimize.minimize(score_data_lwo_numba, numpy.sqrt(h), args = (De, lwo_halfwidth), method=opt_method, options = options_use)
 
 	h_opt = optim_out['x']*optim_out['x']
 	h_opt = h_opt[0] # Pull out actual value.
@@ -261,7 +263,7 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, is_multirealization = False
 		
 		h = [numpy.power(De_max.shape[0], -1./(p + 5))] + h
 
-		optim_out = scipy.optimize.minimize(score_data_lwo, numpy.sqrt(h), args = (De, lwo_halfwidth), method=opt_method, options = options_use)
+		optim_out = scipy.optimize.minimize(score_data_lwo_numba, numpy.sqrt(h), args = (De, lwo_halfwidth), method=opt_method, options = options_use)
 		h_opt = optim_out['x']*optim_out['x']
 		
 		if output_verbose:
@@ -623,6 +625,84 @@ def score_data_lwo_weave(h_sr, De, lwo_halfwidth = 0, print_iterates = False):
 	weave.inline(code,['summands_top', 'summands_bottom', 'N', 'lwo_halfwidth', 'fs'],
 			   type_converters=weave.converters.blitz)
 
+
+	score = -numpy.log(fs/h[p_internal]/numpy.sqrt(2*numpy.pi)).mean()
+	
+	if print_iterates:
+		print(h, score)
+	
+	return score
+
+@jit(nopython=True)
+def score_data_lwo_numba(h_sr, De, lwo_halfwidth = 0, print_iterates = False):
+	h = h_sr*h_sr
+	h_squared = h*h
+	
+	p_internal = (De.shape[2] - 1)
+
+	# We are now ready to *vary* h, which requires
+	# a recompute for each value of h.
+
+	# Rescale De by the bandwidths.
+
+	De_scaled = De.copy()
+
+	De_scaled /= h_squared
+
+	# Each term of the KDE numerator and
+	# denominator sum is given by summing
+	# across the third dimension of De_scaled
+	# and exponentiating.
+
+	S_bottom = De_scaled[:,:,:p_internal].sum(2)
+	S_top = S_bottom + De_scaled[:,:,p_internal]
+
+	summands_bottom = numpy.exp(S_bottom)
+	summands_top	= numpy.exp(S_top)
+
+	N = De_scaled.shape[0]
+
+	fs = numpy.empty(N, dtype = 'float32')
+
+	# Pythonic implementation:
+	# for t in range(N):
+	# 	lb = numpy.max([0, t - lwo_halfwidth])
+	# 	ub = numpy.min([N-1, t + lwo_halfwidth])
+
+	# 	mask = numpy.array([1]*lb + [0]*(ub-lb+1) + [1]*(N - ub - 1),dtype=numpy.bool)
+
+	# 	s_top = numpy.compress(mask, summands_top[t, :])
+	# 	s_bottom = numpy.compress(mask, summands_bottom[t, :])
+
+	# 	fs[t] = s_top.sum()/s_bottom.sum()
+
+	# C-like implementation.
+
+	for i in range(N):
+		acc_top = 0
+		acc_bottom = 0
+
+		if i < lwo_halfwidth:
+			lb = 0
+		else:
+			lb = i - lwo_halfwidth;
+
+		if i > N - 1 - lwo_halfwidth:
+			ub = N
+		else: 
+			ub = i + lwo_halfwidth + 1
+
+		for j in range(lb):
+			acc_top += summands_top[i, j]
+
+			acc_bottom += summands_bottom[i, j]
+
+		for j in range(ub, N):
+			acc_top += summands_top[i, j]
+
+			acc_bottom += summands_bottom[i, j]
+
+		fs[i] = acc_top / acc_bottom
 
 	score = -numpy.log(fs/h[p_internal]/numpy.sqrt(2*numpy.pi)).mean()
 	

@@ -143,7 +143,7 @@ setup(
     #
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
-    install_requires=['numpy', 'scipy', 'nlopt', 'matplotlib', 'jpype1', 'pyflann-py3', 'sdeint', 'sklearn'],  # Optional
+    install_requires=['numpy', 'scipy', 'nlopt', 'matplotlib', 'jpype1', 'pyflann-py3', 'sdeint', 'sklearn', 'numba'],  # Optional
 
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"
