@@ -358,14 +358,6 @@ def score_model_orders_with_saved_bws(x, p_max, save_name, is_multirealization =
 	return p_opt, nlls, hs, active_sets
 
 def estimate_ser_kde(x, p_opt, h, active_set, is_multirealization = False):
-	# Adjust active set for the fact that p_max may be different from p_opt
-	# by shifting everything back by active_set[-1] so that active_set[-1] is
-	# p_opt, etc.
-
-	active_set = active_set - active_set[-1] + p_opt
-
-	# The half-width for the leave-window-out estimate the specific entropy rate.
-
 	lwo_halfwidth = 10
 
 	De_max = stack_distance_matrix(x, p_opt, mean_x = 0.0, sd_x = 1.0, is_multirealization = is_multirealization)
