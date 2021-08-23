@@ -365,7 +365,7 @@ def estimate_ser_kde(x, p_opt, h, active_set, is_multirealization = False):
 	De = numpy.empty(shape = (De_max.shape[0], De_max.shape[1], len(active_set)), dtype = 'float32', order = 'C')
 
 	for lag_ind, lag_val in enumerate(active_set):
-		De[:, :, lag_ind] = De_max[:, :, lag_val]
+		De[:, :, lag_ind] = De_max[:, :, lag_val-(p_opt+1)]
 
 	#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 	#
