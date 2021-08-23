@@ -231,7 +231,7 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, is_multirealization = False
 	if not os.path.exists('bw-saved'):
 		os.makedirs('bw-saved')
 
-	save_bandwidth_o(p_max, [h[0]], numpy.array([0]), sd_x, 'bw-saved/' + save_name + '-' + str(0))
+	save_bandwidth_o(p_max, [h[0]], numpy.array([p_max]), sd_x, 'bw-saved/' + save_name + '-' + str(0))
 
 	if output_verbose:
 		print(h)
@@ -288,7 +288,7 @@ def choose_model_order_nlpl_kde(x, p_max, save_name, is_multirealization = False
 	active_set_return = {}
 
 	for p in [0] + ps:
-		h_cur, active_set_cur = load_bandwidth_o('bw-saved/' + save_name + '-' + str(p), p_max)
+		h_cur, active_set_cur = load_bandwidth_o('bw-saved/' + save_name + '-' + str(p), p)
 
 		h_raw[p] = h_cur
 		active_set_return[p] = active_set_cur
@@ -358,6 +358,8 @@ def score_model_orders_with_saved_bws(x, p_max, save_name, is_multirealization =
 	return p_opt, nlls, hs, active_sets
 
 def estimate_ser_kde(x, p_opt, h, active_set, is_multirealization = False):
+	# The half-width for the leave-window-out estimate the specific entropy rate.
+
 	lwo_halfwidth = 10
 
 	De_max = stack_distance_matrix(x, p_opt, mean_x = 0.0, sd_x = 1.0, is_multirealization = is_multirealization)
