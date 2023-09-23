@@ -13,6 +13,49 @@ Installation
 pip install git+https://github.com/ddarmon/sidpy
 ```
 
+## Installation on ARM-based Macs
+
+If you run into an error message like the following after running `import sidpy`:
+
+```
+File /path/site-packages/pyflann/bindings/flann_ctypes.py:173
+    171 flannlib = load_flann_library()
+    172 if flannlib == None:
+--> 173     raise ImportError('Cannot load dynamic library. Did you compile FLANN?')
+    176 class FlannLib:
+    177     pass
+
+ImportError: Cannot load dynamic library. Did you compile FLANN?
+```
+
+this is likely because the dynamic library `libflann.dylib` is not in the `pyflann/bindings` folder.
+
+To fix this:
+
+1. **Install `flann`**
+   ```
+   brew install flann
+   ```
+
+2. **Find Installation Location**
+   Find where the `flann` library is installed by running:
+   ```
+   brew info flann
+   ```
+   Go to the location provided by `brew`. On my current installation and version of `flann`, it is:
+   ```
+   cd /opt/homebrew/Cellar/flann/1.9.2_1
+   ```
+
+3. **Copy the `libflann.v.v.v.dylib` File**
+   Finally, copy the `libflann.v.v.v.dylib` file to `site-packages/pyflann` as `libflann.dylib` using:
+   ```
+   mkdir -p /path/site-packages/pyflann/bindings/lib/darwin/
+   cp /opt/homebrew/Cellar/flann/1.9.2_1/lib/libflann.1.9.2.dylib /path/site-packages/pyflann/bindings/lib/darwin/libflann.dylib
+   ```
+
+Make sure to replace `/path/` with the actual path where your `site-packages/pyflann` is located. Also, the version number in the `libflann.v.v.v.dylib` should match the installed version of `flann`. In this example, it's `1.9.2`.
+
 Using sidpy
 ------------
 
