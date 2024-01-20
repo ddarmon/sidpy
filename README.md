@@ -15,6 +15,8 @@ pip install git+https://github.com/ddarmon/sidpy
 
 ## Installation on ARM-based Macs
 
+### `flann`
+
 If you run into an error message like the following after running `import sidpy`:
 
 ```
@@ -55,6 +57,14 @@ To fix this:
    ```
 
 Make sure to replace `/path/` with the actual path where your `site-packages/pyflann` is located. Also, the version number in the `libflann.v.v.v.dylib` should match the installed version of `flann`. In this example, it's `1.9.2`.
+
+### `nlopt`
+
+If `nlopt` fails to install using `pip`, try `conda`:
+
+```
+conda install nlopt
+```
 
 Using sidpy
 ------------
